@@ -1,0 +1,43 @@
+[project]
+name = "TiebaManageBot"
+version = "0.1.0"
+description = "TiebaManageBot"
+authors = [{ name = "mxcoras", email = "mxcoras@outlook.com" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiotieba>=4.5.3a1",
+    "aiotieba-reviewer>=0.7.1",
+    "beanie>=1.30.0",
+    "httpx>=0.28.1",
+    "nb-cli>=1.4.2",
+    "nonebot-adapter-onebot>=2.4.6",
+    "nonebot-plugin-alconna>=0.59.0",
+    "nonebot-plugin-apscheduler>=0.5.0",
+    "nonebot2[fastapi]>=2.4.2",
+    "passlib[bcrypt]>=1.7.4",
+    "playwright>=1.53.0",
+    "pyjwt>=2.10.1",
+    "python-multipart>=0.0.20",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.2",
+]
+
+[tool.uv.sources]
+aiotieba = { index = "private-pypi" }
+aiotieba-reviewer = { index = "private-pypi" }
+
+[[tool.uv.index]]
+name = "private-pypi"
+url = "http://git.mx:8888/simple"
+
+[tool.nonebot]
+adapters = [
+    { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" },
+    { name = "Console", module_name = "nonebot.adapters.console" },
+]
+plugins = ["nonebot_plugin_apscheduler", "nonebot_plugin_alconna"]
+plugin_dirs = ["src/plugins"]
