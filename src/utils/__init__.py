@@ -129,13 +129,20 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
                     font-family: "NotoSans";
                     src: url("{font_url}") format("truetype");
                     font-display: block;
+                    unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+F900-FAFF, U+2F800-2FA1F;
                 }}
                 body {{
-                    font-family: "NotoSans", "Noto Sans SC";
+                    font-family: "NotoSansSC", "Noto Sans CJK SC";
                     font-size: {font_size}px;
                     line-height: {font_size + 2}px;
                     margin: 0;
                     padding: 0;
+                    font-variant-east-asian: normal;
+                    font-feature-settings: "locl" 1;
+                    text-rendering: optimizeLegibility;
+                    -webkit-font-feature-settings: "locl" 1;
+                    -moz-font-feature-settings: "locl" 1;
+                    lang: zh-CN;
                 }}
                 pre {{
                     margin-left: 10px;
@@ -154,11 +161,6 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
 
     page = await context.new_page()
     await page.set_content(html_content)
-    # rendered_font = await page.evaluate('''() => {
-    #     const pre = document.querySelector('pre');
-    #     return window.getComputedStyle(pre).fontFamily;
-    # }''')
-    # print(f"Rendered font: {rendered_font}")
 
     pre_width = await page.evaluate("""() => {
         const pre = document.querySelector('pre');
