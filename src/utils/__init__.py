@@ -1,5 +1,6 @@
 import re
 import textwrap
+from pathlib import Path
 
 import aiotieba as tb
 from aiotieba.typing import UserInfo
@@ -95,7 +96,11 @@ async def get_user_name(bot: Bot, group_id: int, user_id: int) -> str | None:
 
 
 async def text_to_image(text: str, font_size: int = 20) -> bytes:
+    if ChromiumCache.context is None:
+        await ChromiumCache.initialize()
     context = ChromiumCache.context
+    assert context is not None
+
     wrapped_text = ""
     for line in text.split("\n"):
         wrapped_line = textwrap.fill(line, width=48)
@@ -112,15 +117,21 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
     lines = list(map(add_indent, lines))
     line_str = "\n".join(lines)
 
-    # font_path = 'static/font/MicrosoftYaHei.ttf'
-    # absolute_font_path = os.path.abspath(font_path)
-    # absolute_font_path = absolute_font_path.replace("\\", "/")
+    # 构建字体文件的绝对路径
+    font_path = Path(__file__).parent.parent.parent / "static" / "font" / "NotoSansSC-Regular.ttf"
+    font_url = font_path.as_uri()
 
     html_content = f"""
     <html>
         <head>
             <style>
+                @font-face {{
+                    font-family: "NotoSans";
+                    src: url("{font_url}") format("truetype");
+                    font-display: block;
+                }}
                 body {{
+                    font-family: "NotoSans", "Noto Sans SC";
                     font-size: {font_size}px;
                     line-height: {font_size + 2}px;
                     margin: 0;
@@ -131,6 +142,7 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
                     margin-top: 10px;
                     display: inline-block;
                     white-space: pre;
+                    font-family: inherit;
                 }}
             </style>
         </head>
@@ -158,9 +170,7 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
     }""")
 
     await page.set_viewport_size({"width": pre_width, "height": pre_height})
-
     screenshot = await page.screenshot(type="jpeg", quality=75, path=None)
-
     await page.close()
 
     return screenshot
@@ -171,7 +181,7 @@ async def get_tieba_user_info(tieba_uid: int, client: tb.Client) -> UserInfo:
     return user_info
 
 
-async def handle_tieba_uid(tieba_uid_str: str) -> int:
+async def handle_tieba_uid(tieba_uid_str: str) -> int | None:
     if tieba_uid_str.startswith("tb."):
         async with tb.Client() as client:
             user_info = await client.get_user_info(tieba_uid_str)
@@ -188,7 +198,7 @@ async def handle_tieba_uid(tieba_uid_str: str) -> int:
         return None
 
 
-async def handle_thread_url(thread_url: str) -> int:
+async def handle_thread_url(thread_url: str) -> int | None:
     if thread_url.isdigit():
         return int(thread_url)
     match = re.search(r"tieba.baidu.com/p/(\d+)", thread_url)
@@ -198,7 +208,7 @@ async def handle_thread_url(thread_url: str) -> int:
         return None
 
 
-async def handle_post_url(post_url: str) -> tuple[int, int]:
+async def handle_post_url(post_url: str) -> tuple[int, int] | None:
     match = re.search(r"tieba.baidu.com/p/(\d+)\?.+post_id=(\d+)", post_url)
     if match:
         return int(match.group(1)), int(match.group(2))

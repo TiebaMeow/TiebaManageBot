@@ -1,5 +1,6 @@
-from loguru import logger
 from pathlib import Path
+
+from loguru import logger
 
 # 创建日志目录
 LOG_DIR = Path("logs")
@@ -16,7 +17,7 @@ logger.add(
     compression=None,
     level="INFO",
     format="{time:YYYY-MM-DD HH:mm:ss} [{level}] {module}:{function} | {message}",
-    filter=lambda record: record["extra"].get("name") == "app_log"
+    filter=lambda record: record["extra"].get("name") == "app_log",
 )
 
 # 定义一个全局的 logger 实例

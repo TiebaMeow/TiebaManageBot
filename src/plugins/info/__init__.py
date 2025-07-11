@@ -551,7 +551,9 @@ async def get_last_replier_handle(bot: Bot, event: GroupMessageEvent, thread_url
             if thread.tid == thread_id:
                 user_id = thread.last_replyer.user_id
                 user_info = await client.get_user_info(user_id)
-                get_last_replier_cmd.send(f"已查询到该贴最后回复者为 {user_info.nick_name}({user_info.tieba_uid})。")
+                await get_last_replier_cmd.send(
+                    f"已查询到该贴最后回复者为 {user_info.nick_name}({user_info.tieba_uid})。"
+                )
                 driver = get_driver()
                 new_event = GroupMessageEvent(
                     time=int(time.time()),

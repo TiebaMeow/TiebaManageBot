@@ -3,11 +3,14 @@ import base64
 import ssl
 from datetime import timedelta, timezone
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import aiotieba as tb
 import httpx
-from aiotieba.typing import UserInfo
+
+if TYPE_CHECKING:
+    from aiotieba.typing import UserInfo
+
 from arclet.alconna import Alconna, Args, Arparma, MultiVar
 from nonebot import get_plugin_config, require
 from nonebot.adapters import Bot
@@ -18,13 +21,13 @@ from nonebot.rule import Rule
 from nonebot.typing import T_State
 from nonebot_plugin_alconna import Field, UniMessage, on_alconna
 
-from db.modules import GroupInfo
 from logger import log
 from src.db import (
     Associated,
     AutoBanList,
     BanReason,
     GroupCache,
+    GroupInfo,
     ImageUtils,
     ImgData,
     TextData,

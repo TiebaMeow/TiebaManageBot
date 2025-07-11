@@ -7,7 +7,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "aiotieba>=4.5.3a1",
-    "aiotieba-reviewer>=0.7.1",
     "beanie>=1.30.0",
     "httpx>=0.28.1",
     "nb-cli>=1.4.2",
@@ -28,7 +27,6 @@ dev = [
 
 [tool.uv.sources]
 aiotieba = { index = "private-pypi" }
-aiotieba-reviewer = { index = "private-pypi" }
 
 [[tool.uv.index]]
 name = "private-pypi"
