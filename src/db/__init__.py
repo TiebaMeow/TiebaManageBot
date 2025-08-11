@@ -1,5 +1,5 @@
 from beanie import init_beanie
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from logger import log
 
@@ -22,7 +22,7 @@ from .modules import (
 
 async def init_db():
     try:
-        client = AsyncIOMotorClient(host="mongodb://localhost:27017")
+        client = AsyncMongoClient(host="mongodb://localhost:27017")
         await init_beanie(
             database=client.tiebabot,
             document_models=[

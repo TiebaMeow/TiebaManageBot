@@ -68,7 +68,7 @@ async def del_thread_handle(bot: Bot, event: GroupMessageEvent, thread_urls: Mat
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tid in tids:
             posts = await client.get_posts(tid)
             user_info = await client.get_user_info(posts.thread.author_id)
@@ -121,7 +121,7 @@ async def del_post_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[
     succeeded = []
     failed = []
     floor_list = []
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         thread_info = await client.get_posts(tid, pn=1, rn=10, sort=PostSortType.DESC)
         if not thread_info.objs:
             await del_post_cmd.finish("获取贴子信息失败，请检查输入。")
@@ -185,7 +185,7 @@ async def blacklist_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match[M
         await blacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.master_BDUSS) as client:
+    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.add_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -229,7 +229,7 @@ async def unblacklist_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match
         await unblacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.master_BDUSS) as client:
+    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.del_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -275,7 +275,7 @@ async def ban_handle(bot: Bot, event: GroupMessageEvent, args: Arparma):
         await ban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.block(group_info.fid, user_info.user_id, day=days):
@@ -323,7 +323,7 @@ async def unban_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match[Multi
         await unban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.unblock(group_info.fid, user_info.user_id):
@@ -366,7 +366,7 @@ async def good_handle(bot: Bot, event: GroupMessageEvent, args: Arparma):
     tid = await handle_thread_url(args.query("thread_url"))
     if tid is None:
         await good_cmd.finish("无法解析链接，请检查输入。")
-    async with tb.Client(group_info.master_BDUSS) as client:
+    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
         match cmd:
             case "加精":
                 if await client.good(group_info.fid, tid):
@@ -445,7 +445,7 @@ async def move_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[str]
     tid = await handle_thread_url(thread_url.result)
     if tid is None:
         await move_cmd.finish("无法解析链接，请检查输入。")
-    async with tb.Client(group_info.master_BDUSS) as client:
+    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
         tab_info = await client.get_tab_map(group_info.fname)
         tab_map = tab_info.map
         for name in tab_name.result:

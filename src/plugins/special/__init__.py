@@ -192,7 +192,7 @@ async def clear_posts_handle(bot: Bot, event: GroupMessageEvent, args: Arparma):
     tieba_uids = [await handle_tieba_uid(tieba_id) for tieba_id in args.query("tieba_uids")]
     if None in tieba_uids:
         await clear_posts_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
         user_ids = [user_info.user_id for user_info in user_infos]
         nicknames = [user_info.nick_name for user_info in user_infos]
@@ -269,7 +269,7 @@ async def add_autoban_handle(bot: Bot, event: GroupMessageEvent, state: T_State,
         await add_autoban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
     state["group_info"] = group_info
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
     state["user_infos"] = user_infos
     state["text_reasons"] = []
@@ -354,7 +354,7 @@ async def add_autoban_input(bot: Bot, state: T_State, input: GroupMessageEvent =
                 group_info,
                 text_data=[TextData(uploader_id=input.user_id, fid=group_info.fid, text="[自动添加]循封")],
             )
-        async with tb.Client(group_info.slave_BDUSS) as client:
+        async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
             if not await client.block(group_info.fid, current_user.user_id, day=10, reason="违规"):
                 log.warning(
                     f"Failed to block user {current_user.nick_name}({current_user.tieba_uid}) in {TiebaNameCache.get(group_info.fid)}"
@@ -445,7 +445,7 @@ async def remove_autoban_handle(bot: Bot, event: GroupMessageEvent, state: T_Sta
         await remove_autoban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     success = []
     failure = []
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
         for user_info in user_infos:
             is_banned, ban_reason = await AutoBanList.ban_status(group_info.group_id, group_info.fid, user_info.user_id)
@@ -511,7 +511,7 @@ async def delete_ban_reason_handle(bot: Bot, event: GroupMessageEvent, state: T_
     tieba_uid = await handle_tieba_uid(args.query("tieba_uid"))
     if tieba_uid is None:
         await delete_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_uid)
     is_banned, ban_reason = await AutoBanList.ban_status(group_info.group_id, group_info.fid, user_info.user_id)
     if is_banned == "not":
@@ -611,7 +611,7 @@ async def add_ban_reason_handle(bot: Bot, event: GroupMessageEvent, state: T_Sta
     tieba_uid = await handle_tieba_uid(args.query("tieba_uid"))
     if tieba_uid is None:
         await add_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_uid)
     is_banned, ban_reason = await AutoBanList.ban_status(group_info.group_id, group_info.fid, user_info.user_id)
     if is_banned == "not":
@@ -713,7 +713,7 @@ async def get_ban_reason_handle(bot: Bot, event: GroupMessageEvent, args: Arparm
     tieba_uid = await handle_tieba_uid(args.query("tieba_uid"))
     if tieba_uid is None:
         await get_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_uid)
     is_banned, ban_reason = await AutoBanList.ban_status(group_info.group_id, group_info.fid, user_info.user_id)
     if is_banned == "not":

@@ -48,10 +48,10 @@ class GroupInfo(BaseDocument):
     is_public: bool = False
     appeal_sub: bool = False
     appeal_autodeny: bool = False
-    appeal_deny_reason: str = "_"
 
     class Settings(BaseDocument.Settings):
         name = "group_info"
+        collection = "group_info"
 
 
 class TextData(BaseModel):
@@ -66,6 +66,7 @@ class ImageDocument(Document):
 
     class Settings:
         name = "images"
+        collection = "images"
 
 
 class ImgData(BaseModel):
@@ -94,6 +95,7 @@ class BanList(BaseDocument):
 
     class Settings(BaseDocument.Settings):
         name = "ban_list"
+        collection = "ban_list"
 
 
 class AssociatedDataContent(BaseModel):
@@ -115,6 +117,7 @@ class AssociatedData(BaseDocument):
 
     class Settings(BaseDocument.Settings):
         name = "associated_data"
+        collection = "associated_data"
         indexes = [
             "tieba_uid",
             ("tieba_uid", "fid"),

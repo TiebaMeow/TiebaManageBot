@@ -55,7 +55,7 @@ async def autoban():
             continue
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
-        async with tb.Client(group_info.slave_BDUSS) as client:
+        async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
             for user_id, ban_reason in banlist.ban_list.items():
                 if ban_reason.enable:
                     result = await client.block(group_info.fid, user_id, day=10, reason="违规")
@@ -73,7 +73,7 @@ async def appeal_push():
     for group_info in group_infos:
         if not group_info.slave_BDUSS or not group_info.appeal_sub:
             continue
-        async with tb.Client(group_info.slave_BDUSS) as client:
+        async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
             appeals = await client.get_unblock_appeals(group_info.fid, rn=20)
             cached_appeals = await AppealCache.get_appeals(group_info.group_id)
             for appeal in appeals.objs:
@@ -84,7 +84,6 @@ async def appeal_push():
                         group_info.fid,
                         appeal_ids=[appeal.appeal_id],
                         refuse=True,
-                        reason=group_info.appeal_deny_reason,
                     )
                     continue
                 if group_info.appeal_autodeny:
@@ -93,7 +92,6 @@ async def appeal_push():
                             group_info.fid,
                             appeal_ids=[appeal.appeal_id],
                             refuse=True,
-                            reason=group_info.appeal_deny_reason,
                         )
                         bot = get_bot()
                         if result:
@@ -206,21 +204,17 @@ async def deal_appeal_handle(event: GroupMessageEvent, args: Arparma):
     await check_slave_BDUSS(event, deal_appeal_cmd)
     cmd = args.context["$shortcut.trigger"].split(" ")[0][1:]
     reason = args.query("reason")
+    if not reason:
+        reason = "无"
     message_id = event.reply.real_id
     appeal_id, user_id = await AppealCache.get_appeal_id(message_id)
     if not appeal_id:
         await deal_appeal_cmd.finish("未找到对应的申诉。")
     group_info = await GroupCache.get(event.group_id)
-    if not reason:
-        reason = group_info.appeal_deny_reason
-    elif len(reason) < 5:
-        reason = f"{reason}（zsbd）"
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_info = await client.get_user_info(user_id)
-        if cmd in ["拒绝申诉", "驳回申诉", "拒绝"]:
-            result = await client.handle_unblock_appeals(
-                group_info.fid, appeal_ids=[appeal_id], refuse=True, reason=reason
-            )
+        if cmd in ["拒绝申诉", "驳回申诉", "拒绝", "驳回"]:
+            result = await client.handle_unblock_appeals(group_info.fid, appeal_ids=[appeal_id], refuse=True)
             if result:
                 await Associated.add_data(
                     user_info,

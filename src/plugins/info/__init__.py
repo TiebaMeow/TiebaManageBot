@@ -78,13 +78,11 @@ checkout_cmd = on_alconna(
 
 @checkout_cmd.handle()
 async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Match[str]):
-    await check_slave_BDUSS(event, checkout_cmd)
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await checkout_cmd.finish("贴吧ID格式错误，请检查输入。")
     await checkout_cmd.send("正在查询...")
-    group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
         nick_name_old_info = await client.get_user_info(user_info.user_id, require=ReqUInfo.BASIC)
         nick_name_old = nick_name_old_info.nick_name_old
@@ -294,12 +292,11 @@ async def check_posts_handle(
     tieba_id_str: Match[str] = AlconnaMatch("tieba_id_str"),
     tieba_names: Match[MultiVar[str]] = AlconnaMatch("tieba_names"),
 ):
-    await check_slave_BDUSS(event, check_posts_cmd)
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await check_posts_cmd.finish("贴吧ID格式错误，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         fids = []
         if tieba_names.result:
             for tieba_name in tieba_names.result:
@@ -342,7 +339,7 @@ async def add_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await add_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
-    async with tb.Client() as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
     group_info = await GroupCache.get(event.group_id)
     state["user_info"] = user_info
@@ -438,7 +435,7 @@ async def get_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await get_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
-    async with tb.Client() as client:
+    async with tb.Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
     state["user_info"] = user_info
     group_info = await GroupCache.get(event.group_id)
@@ -545,7 +542,7 @@ async def get_last_replier_handle(bot: Bot, event: GroupMessageEvent, thread_url
     if not thread_id:
         await get_last_replier_cmd.finish("无法解析链接，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(group_info.slave_BDUSS) as client:
+    async with tb.Client(try_ws=True) as client:
         threads = await client.get_last_replyers(group_info.fname, rn=50)
         for thread in threads.objs:
             if thread.tid == thread_id:
