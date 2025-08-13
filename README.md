@@ -33,6 +33,12 @@ _基于 [Nonebot2](https://github.com/nonebot/nonebot2) 与 [aiotieba](https://g
 uv sync
 ```
 
+3. 安装 `playwright` 所需无头 `Chromium`
+
+```shell
+uv run playwright install chromium-headless-shell
+```
+
 ## 运行
 
 ```shell
