@@ -78,11 +78,13 @@ checkout_cmd = on_alconna(
 
 @checkout_cmd.handle()
 async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Match[str]):
+    await check_slave_BDUSS(event, checkout_cmd)
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await checkout_cmd.finish("贴吧ID格式错误，请检查输入。")
     await checkout_cmd.send("正在查询...")
-    async with tb.Client(try_ws=True) as client:
+    group_info = await GroupCache.get(event.group_id)
+    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
         nick_name_old_info = await client.get_user_info(user_info.user_id, require=ReqUInfo.BASIC)
         nick_name_old = nick_name_old_info.nick_name_old
