@@ -1,22 +1,22 @@
 from typing import Literal
 
-import aiotieba as tb
 from aiotieba import PostSortType
 from arclet.alconna import Alconna, Args, Arparma, MultiVar
 from nonebot import get_plugin_config, require
-from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
-from nonebot_plugin_alconna import Field, Match, on_alconna
+from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
 from logger import log
+from src.common import Client
 from src.db import Associated, GroupCache, TextData
 from src.utils import (
-    check_master_BDUSS,
-    check_slave_BDUSS,
     handle_thread_url,
-    handle_tieba_uid,
+    handle_thread_urls,
+    handle_tieba_uids,
+    require_master_BDUSS,
+    require_slave_BDUSS,
     rule_admin,
     rule_master,
     rule_moderator,
@@ -60,15 +60,19 @@ del_thread_cmd = on_alconna(
 
 
 @del_thread_cmd.handle()
-async def del_thread_handle(bot: Bot, event: GroupMessageEvent, thread_urls: Match[MultiVar[str]]):
-    await check_slave_BDUSS(event, del_thread_cmd)
+@require_slave_BDUSS
+async def del_thread_handle(
+    event: GroupMessageEvent,
+    thread_urls: Query[tuple[str, ...]] = AlconnaQuery("thread_urls", ()),
+):
     group_info = await GroupCache.get(event.group_id)
-    tids = [await handle_thread_url(url) for url in thread_urls.result][:30]
-    if None in tids:
+    assert group_info is not None  # for pylance
+    tids = handle_thread_urls(thread_urls.result)
+    if 0 in tids:
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tid in tids:
             posts = await client.get_posts(tid)
             user_info = await client.get_user_info(posts.thread.author_id)
@@ -112,16 +116,21 @@ del_post_cmd = on_alconna(
 
 
 @del_post_cmd.handle()
-async def del_post_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[str], floors: Match[MultiVar[str]]):
-    await check_slave_BDUSS(event, del_post_cmd)
+@require_slave_BDUSS
+async def del_post_handle(
+    event: GroupMessageEvent,
+    thread_url: Match[str],
+    floors: Query[tuple[str, ...]] = AlconnaQuery("floors", ()),
+):
     group_info = await GroupCache.get(event.group_id)
-    tid = await handle_thread_url(thread_url.result)
-    if tid is None:
+    assert group_info is not None  # for pylance
+    tid = handle_thread_url(thread_url.result)
+    if tid == 0:
         await del_post_cmd.finish("参数中包含无法解析的链接，请检查输入。")
     succeeded = []
     failed = []
     floor_list = []
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         thread_info = await client.get_posts(tid, pn=1, rn=10, sort=PostSortType.DESC)
         if not thread_info.objs:
             await del_post_cmd.finish("获取贴子信息失败，请检查输入。")
@@ -177,15 +186,16 @@ blacklist_cmd = on_alconna(
 
 
 @blacklist_cmd.handle()
-async def blacklist_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match[MultiVar[str]]):
-    await check_master_BDUSS(event, blacklist_cmd)
+@require_master_BDUSS
+async def blacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ())):
     group_info = await GroupCache.get(event.group_id)
-    uids = [await handle_tieba_uid(uid) for uid in user_ids.result]
-    if None in uids:
+    assert group_info is not None  # for pylance
+    uids = await handle_tieba_uids(user_ids.result)
+    if 0 in uids:
         await blacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.add_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -221,15 +231,16 @@ unblacklist_cmd = on_alconna(
 
 
 @unblacklist_cmd.handle()
-async def unblacklist_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match[MultiVar[str]]):
-    await check_master_BDUSS(event, unblacklist_cmd)
+@require_master_BDUSS
+async def unblacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ())):
     group_info = await GroupCache.get(event.group_id)
-    uids = [await handle_tieba_uid(uid) for uid in user_ids.result]
+    assert group_info is not None  # for pylance
+    uids = await handle_tieba_uids(user_ids.result)
     if None in uids:
         await unblacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.del_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -266,19 +277,24 @@ ban_cmd = on_alconna(
 
 
 @ban_cmd.handle()
-async def ban_handle(bot: Bot, event: GroupMessageEvent, args: Arparma):
-    days = int(args.query("days"))
-    await check_slave_BDUSS(event, ban_cmd)
+@require_slave_BDUSS
+async def ban_handle(
+    event: GroupMessageEvent,
+    days: Match[Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]],
+    user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ()),
+):
+    days_int = int(days.result)
     group_info = await GroupCache.get(event.group_id)
-    uids = [await handle_tieba_uid(uid) for uid in args.query("user_ids")]
+    assert group_info is not None  # for pylance
+    uids = await handle_tieba_uids(user_ids.result)
     if None in uids:
         await ban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
-            if await client.block(group_info.fid, user_info.user_id, day=days):
+            if await client.block(group_info.fid, user_info.user_id, day=days_int):
                 succeeded.append(tieba_uid)
                 await Associated.add_data(
                     user_info,
@@ -315,15 +331,16 @@ unban_cmd = on_alconna(
 
 
 @unban_cmd.handle()
-async def unban_handle(bot: Bot, event: GroupMessageEvent, user_ids: Match[MultiVar[str]]):
-    await check_slave_BDUSS(event, unban_cmd)
+@require_slave_BDUSS
+async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ())):
     group_info = await GroupCache.get(event.group_id)
-    uids = [await handle_tieba_uid(uid) for uid in user_ids.result]
+    assert group_info is not None  # for pylance
+    uids = await handle_tieba_uids(user_ids.result)
     if None in uids:
         await unban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.unblock(group_info.fid, user_info.user_id):
@@ -359,14 +376,15 @@ good_cmd = on_alconna(
 
 
 @good_cmd.handle()
-async def good_handle(bot: Bot, event: GroupMessageEvent, args: Arparma):
+@require_master_BDUSS
+async def good_handle(event: GroupMessageEvent, thread_url: Match[str], args: Arparma):
     cmd = args.context["$shortcut.regex_match"].group()[1:]
-    await check_master_BDUSS(event, good_cmd)
     group_info = await GroupCache.get(event.group_id)
-    tid = await handle_thread_url(args.query("thread_url"))
+    assert group_info is not None  # for pylance
+    tid = handle_thread_url(thread_url.result)
     if tid is None:
         await good_cmd.finish("无法解析链接，请检查输入。")
-    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_BDUSS, try_ws=True) as client:
         match cmd:
             case "加精":
                 if await client.good(group_info.fid, tid):
@@ -420,7 +438,10 @@ move_alc = Alconna(
         "tab_name",
         MultiVar(str, "+"),
         Field(
-            completion=lambda: "若原贴位于默认分区，请输入目标分区名称。若原贴位于非默认分区，请输入原贴分区名称与目标分区名称，以空格分隔。"
+            completion=lambda: (
+                "若原贴位于默认分区，请输入目标分区名称。"
+                "若原贴位于非默认分区，请输入原贴分区名称与目标分区名称，以空格分隔。"
+            )
         ),
     ],
 )
@@ -439,21 +460,24 @@ move_cmd = on_alconna(
 
 
 @move_cmd.handle()
-async def move_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[str], tab_name: Match[MultiVar[str]]):
-    await check_master_BDUSS(event, move_cmd)
+@require_master_BDUSS
+async def move_handle(
+    event: GroupMessageEvent, thread_url: Match[str], tab_name: Query[tuple[str, ...]] = AlconnaQuery("tab_name", ())
+):
     group_info = await GroupCache.get(event.group_id)
-    tid = await handle_thread_url(thread_url.result)
+    assert group_info is not None  # for pylance
+    tid = handle_thread_url(thread_url.result)
     if tid is None:
         await move_cmd.finish("无法解析链接，请检查输入。")
-    async with tb.Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_BDUSS, try_ws=True) as client:
         tab_info = await client.get_tab_map(group_info.fname)
         tab_map = tab_info.map
         for name in tab_name.result:
             if name not in tab_map:
                 await move_cmd.finish("分区名称错误，请检查输入。")
-        from_tab_id = 0 if len(tab_name.result) == 1 else tab_map.get(tab_name.result[0])
-        to_tab_id = tab_map.get(tab_name.result[-1])
-        if await client.move(group_info.fid, tid, to_tab_id, from_tab_id):
+        from_tab_id = 0 if len(tab_name.result) == 1 else tab_map.get(tab_name.result[0], 0)
+        to_tab_id = tab_map.get(tab_name.result[-1], 0)
+        if await client.move(group_info.fid, tid, to_tab_id=to_tab_id, from_tab_id=from_tab_id):
             await move_cmd.finish("移贴成功。")
         else:
             await move_cmd.finish("移贴失败。")

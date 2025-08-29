@@ -1,7 +1,6 @@
 import asyncio
 
-import aiotieba as tb
-
+from src.common import Client
 from src.db import TiebaNameCache
 from src.utils import text_to_image
 
@@ -12,7 +11,7 @@ class AlwaysEqual:
 
 
 class Producer:
-    def __init__(self, client: tb.Client, user_id: int, fids: list[int] | None):
+    def __init__(self, client: Client, user_id: int, fids: list[int] | None):
         self.queue = asyncio.Queue(maxsize=100)
         self.buffer = []
         self.user_id = user_id

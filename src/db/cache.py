@@ -1,8 +1,9 @@
 import asyncio
 
-import aiotieba as tb
 from beanie import Document
 from playwright.async_api import async_playwright
+
+from src.common import Client
 
 from .modules import GroupInfo
 
@@ -148,7 +149,7 @@ class TiebaNameCache:
 
     @classmethod
     async def _fetch(cls, fid: int) -> str:
-        async with tb.Client() as client:
+        async with Client() as client:
             return await client.get_fname(fid)
 
 

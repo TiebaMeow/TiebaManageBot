@@ -2,16 +2,16 @@ import time
 from datetime import datetime
 from typing import Literal
 
-import aiotieba as tb
 from arclet.alconna import Alconna, Args, Arparma
 from nonebot import get_bot, get_plugin_config, require
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
-from nonebot_plugin_alconna import on_alconna
+from nonebot_plugin_alconna import Match, on_alconna
 from nonebot_plugin_apscheduler import scheduler
 
 from logger import log
+from src.common import Client
 from src.db import (
     AppealCache,
     Associated,
@@ -21,7 +21,7 @@ from src.db import (
     TiebaNameCache,
 )
 from src.utils import (
-    check_slave_BDUSS,
+    require_slave_BDUSS,
     rule_admin,
     rule_moderator,
     rule_reply,
@@ -51,11 +51,12 @@ async def autoban():
     banlists = await AutoBanList.get_ban_lists()
     for banlist in banlists:
         group_info = await GroupCache.get(banlist.group_id)
+        assert group_info is not None  # for pylance
         if banlist.last_autoban and (datetime.now() - banlist.last_autoban).days < 3:
             continue
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
-        async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+        async with Client(group_info.slave_BDUSS, try_ws=True) as client:
             for user_id, ban_reason in banlist.ban_list.items():
                 if ban_reason.enable:
                     result = await client.block(group_info.fid, user_id, day=10, reason="违规")
@@ -73,7 +74,7 @@ async def appeal_push():
     for group_info in group_infos:
         if not group_info.slave_BDUSS or not group_info.appeal_sub:
             continue
-        async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+        async with Client(group_info.slave_BDUSS, try_ws=True) as client:
             appeals = await client.get_unblock_appeals(group_info.fid, rn=20)
             cached_appeals = await AppealCache.get_appeals(group_info.group_id)
             for appeal in appeals.objs:
@@ -105,7 +106,10 @@ async def appeal_push():
                             await bot.call_api(
                                 "send_group_msg",
                                 **{
-                                    "message": f"由于即将超时，已自动拒绝用户{user_info.nick_name}({user_info.tieba_uid})的封禁申诉。",
+                                    "message": (
+                                        f"由于即将超时，已自动拒绝用户"
+                                        f"{user_info.nick_name}({user_info.tieba_uid})的封禁申诉。"
+                                    ),
                                     "group_id": group_info.group_id,
                                 },
                             )
@@ -115,7 +119,15 @@ async def appeal_push():
                 if (appeal.appeal_id, user_info.user_id) not in cached_appeals:
                     punish_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(appeal.punish_time))
                     appeal_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(appeal.appeal_time))
-                    msg = f"待处理的封禁申诉(appeal_id: {appeal.appeal_id})：\n用户：{user_info.nick_name}({user_info.tieba_uid})\n封禁开始时间：{punish_time}\n封禁天数：{appeal.punish_day}\n操作人：{appeal.op_name}\n申诉理由：{appeal.appeal_reason}\n申诉时间：{appeal_time}"
+                    msg = (
+                        f"待处理的封禁申诉(appeal_id: {appeal.appeal_id})：\n"
+                        f"用户：{user_info.nick_name}({user_info.tieba_uid})\n"
+                        f"封禁开始时间：{punish_time}\n"
+                        f"封禁天数：{appeal.punish_day}\n"
+                        f"操作人：{appeal.op_name}\n"
+                        f"申诉理由：{appeal.appeal_reason}\n"
+                        f"申诉时间：{appeal_time}"
+                    )
                     bot = get_bot()
                     try:
                         message_id = await bot.call_api(
@@ -123,7 +135,7 @@ async def appeal_push():
                         )
                         message_id = message_id["message_id"]
                         assert isinstance(message_id, int)
-                    except BaseException:
+                    except Exception:
                         log.error(f"Failed to push appeal message to {group_info.group_id}")
                     else:
                         await AppealCache.set_appeal_id(message_id, (appeal.appeal_id, user_info.user_id))
@@ -149,11 +161,11 @@ appeal_switch_cmd = on_alconna(
 
 
 @appeal_switch_cmd.handle()
+@require_slave_BDUSS
 async def appeal_switch_handle(event: GroupMessageEvent, args: Arparma):
-    await check_slave_BDUSS(event, appeal_switch_cmd)
     try:
         cmd = args.context["$shortcut.regex_match"].group()[1:]
-    except BaseException:
+    except Exception:
         cmd = "状态"
     switch = args.query("switch")
     if switch == "开启":
@@ -170,6 +182,7 @@ async def appeal_switch_handle(event: GroupMessageEvent, args: Arparma):
         await appeal_switch_cmd.finish(f"已关闭{cmd}。")
     else:
         group_info = await GroupCache.get(event.group_id)
+        assert group_info is not None  # for pylance
         if cmd == "申诉推送":
             if group_info.appeal_sub:
                 await appeal_switch_cmd.finish("当前已开启申诉推送。")
@@ -200,18 +213,21 @@ deal_appeal_cmd = on_alconna(
 
 
 @deal_appeal_cmd.handle()
-async def deal_appeal_handle(event: GroupMessageEvent, args: Arparma):
-    await check_slave_BDUSS(event, deal_appeal_cmd)
+@require_slave_BDUSS
+async def deal_appeal_handle(event: GroupMessageEvent, reason: Match[str], args: Arparma):
     cmd = args.context["$shortcut.trigger"].split(" ")[0][1:]
-    reason = args.query("reason")
-    if not reason:
-        reason = "无"
+    if reason.available:
+        reason_str = reason.result
+    else:
+        reason_str = "无"
+    assert event.reply is not None  # for pylance
     message_id = event.reply.real_id
     appeal_id, user_id = await AppealCache.get_appeal_id(message_id)
     if not appeal_id:
         await deal_appeal_cmd.finish("未找到对应的申诉。")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    assert group_info is not None  # for pylance
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_info = await client.get_user_info(user_id)
         if cmd in ["拒绝申诉", "驳回申诉", "拒绝", "驳回"]:
             result = await client.handle_unblock_appeals(group_info.fid, appeal_ids=[appeal_id], refuse=True)
@@ -221,7 +237,9 @@ async def deal_appeal_handle(event: GroupMessageEvent, args: Arparma):
                     group_info,
                     text_data=[
                         TextData(
-                            uploader_id=event.user_id, fid=group_info.fid, text=f"[自动添加]拒绝申诉，理由：{reason}"
+                            uploader_id=event.user_id,
+                            fid=group_info.fid,
+                            text=f"[自动添加]拒绝申诉，理由：{reason_str}",
                         )
                     ],
                 )
@@ -237,7 +255,9 @@ async def deal_appeal_handle(event: GroupMessageEvent, args: Arparma):
                     group_info,
                     text_data=[
                         TextData(
-                            uploader_id=event.user_id, fid=group_info.fid, text=f"[自动添加]通过申诉，理由：{reason}"
+                            uploader_id=event.user_id,
+                            fid=group_info.fid,
+                            text=f"[自动添加]通过申诉，理由：{reason_str}",
                         )
                     ],
                 )

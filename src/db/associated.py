@@ -1,3 +1,4 @@
+from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from aiotieba.typing import UserInfo
 
 from .modules import AssociatedData, AssociatedDataContent, GroupInfo, ImgData, TextData
@@ -8,7 +9,7 @@ __all__ = ["Associated"]
 class Associated:
     @staticmethod
     async def add_data(
-        user_info: UserInfo,
+        user_info: UserInfo | UserInfo_TUid,
         group_info: GroupInfo,
         text_data: list[TextData] | None = None,
         img_data: list[ImgData] | None = None,
@@ -36,7 +37,7 @@ class Associated:
         try:
             await associated_data.save()
             return True
-        except BaseException:
+        except Exception:
             return False
 
     @staticmethod
@@ -61,6 +62,6 @@ class Associated:
             try:
                 await associated_data.save()
                 return True
-            except BaseException:
+            except Exception:
                 return False
         return False

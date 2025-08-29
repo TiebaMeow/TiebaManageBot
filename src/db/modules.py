@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
@@ -15,6 +16,12 @@ __all__ = [
     "AssociatedData",
 ]
 
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def now_with_tz():
+    return datetime.now(SHANGHAI_TZ)
+
 
 class ApiUser(Document):
     username: str
@@ -25,7 +32,7 @@ class ApiUser(Document):
 
 
 class BaseDocument(Document):
-    last_update: datetime = Field(default_factory=datetime.now)
+    last_update: datetime = Field(default_factory=now_with_tz)
 
     class Settings:
         use_state_management = True
@@ -45,6 +52,7 @@ class GroupInfo(BaseDocument):
     fname: str = ""
     master_BDUSS: str = ""  # noqa: N815
     slave_BDUSS: str = ""  # noqa: N815
+    slave_STOKEN: str = ""  # noqa: N815
     is_public: bool = False
     appeal_sub: bool = False
     appeal_autodeny: bool = False
@@ -57,7 +65,7 @@ class GroupInfo(BaseDocument):
 class TextData(BaseModel):
     uploader_id: int = Field(...)
     fid: int = Field(...)
-    upload_time: datetime = Field(default_factory=datetime.now)
+    upload_time: datetime = Field(default_factory=now_with_tz)
     text: str = Field(...)
 
 
@@ -72,13 +80,13 @@ class ImageDocument(Document):
 class ImgData(BaseModel):
     uploader_id: int = Field(...)
     fid: int = Field(...)
-    upload_time: datetime = Field(default_factory=datetime.now)
+    upload_time: datetime = Field(default_factory=now_with_tz)
     image_id: str = Field(...)
     note: str = Field(...)
 
 
 class BanReason(BaseModel):
-    ban_time: datetime = Field(default_factory=datetime.now)
+    ban_time: datetime = Field(default_factory=now_with_tz)
     operator_id: int = Field(...)
     enable: bool = True
     unban_time: datetime | None = None

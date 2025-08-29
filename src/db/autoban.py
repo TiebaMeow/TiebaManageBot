@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
+from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from aiotieba.typing import UserInfo
 
 from .modules import BanList, BanReason
@@ -18,11 +19,11 @@ class AutoBanList:
         try:
             await ban_list.save()
             return True
-        except BaseException:
+        except Exception:
             return False
 
     @staticmethod
-    async def unban(group_id: int, fid: int, operator: int, user_info: UserInfo) -> bool:
+    async def unban(group_id: int, fid: int, operator: int, user_info: UserInfo | UserInfo_TUid) -> bool:
         ban_list = await BanList.find_one(BanList.group_id == group_id, BanList.fid == fid)
         if not ban_list or user_info.user_id not in ban_list.ban_list:
             return False
@@ -31,7 +32,7 @@ class AutoBanList:
         ban_list.ban_list[user_info.user_id].unban_operator_id = operator
         try:
             await ban_list.save()
-        except BaseException:
+        except Exception:
             return False
         return True
 
@@ -65,7 +66,7 @@ class AutoBanList:
         ban_list.ban_list[user_info.user_id] = ban_reason
         try:
             await ban_list.save()
-        except BaseException:
+        except Exception:
             return False
         return True
 

@@ -3,9 +3,9 @@ import base64
 import operator
 import ssl
 import time
+from typing import TYPE_CHECKING
 
 import aiohttp
-import aiotieba as tb
 import httpx
 from aiotieba import ReqUInfo
 from arclet.alconna import Alconna, Args, MultiVar
@@ -24,26 +24,33 @@ from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 from nonebot.typing import T_State
 from nonebot_plugin_alconna import (
-    AlconnaMatch,
     AlconnaMatcher,
+    AlconnaQuery,
     Field,
     Match,
+    Query,
     UniMessage,
     on_alconna,
 )
 
 from logger import log
-from src.db import Associated, GroupCache, ImageUtils, ImgData, TextData, TiebaNameCache
+from src.common import Client
+from src.db import Associated, GroupCache, ImageUtils, TextData, TiebaNameCache
 from src.utils import (
-    check_slave_BDUSS,
     handle_thread_url,
     handle_tieba_uid,
+    require_slave_BDUSS,
     rule_signed,
     text_to_image,
 )
 
 from .config import Config
 from .producer import Producer
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
 
 require("nonebot_plugin_alconna")
 
@@ -77,14 +84,15 @@ checkout_cmd = on_alconna(
 
 
 @checkout_cmd.handle()
-async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Match[str]):
-    await check_slave_BDUSS(event, checkout_cmd)
+@require_slave_BDUSS
+async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await checkout_cmd.finish("贴吧ID格式错误，请检查输入。")
     await checkout_cmd.send("正在查询...")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(group_info.slave_BDUSS, try_ws=True) as client:
+    assert group_info is not None  # for pylance
+    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
         nick_name_old_info = await client.get_user_info(user_info.user_id, require=ReqUInfo.BASIC)
         nick_name_old = nick_name_old_info.nick_name_old
@@ -100,17 +108,17 @@ async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Matc
                         html = await resp.text()
                         soup = BeautifulSoup(html, "lxml")
                         table = soup.find("table", class_="table table-hover")
-                        tbody = table.find("tbody")
-                        rows = tbody.find_all("tr")
+                        tbody = table.find("tbody")  # type: ignore
+                        rows = tbody.find_all("tr")  # type: ignore
                         user_tieba = [
                             {
-                                "tieba_name": row.find_all("td")[0].text.strip(),
-                                "experience": row.find_all("td")[1].text.strip(),
-                                "level": row.find_all("td")[2].text.strip(),
+                                "tieba_name": row.find_all("td")[0].text.strip(),  # type: ignore
+                                "experience": row.find_all("td")[1].text.strip(),  # type: ignore
+                                "level": row.find_all("td")[2].text.strip(),  # type: ignore
                             }
                             for row in rows
                         ]
-            except BaseException:
+            except Exception:
                 user_tieba = []
         else:
             user_tieba = []
@@ -118,10 +126,8 @@ async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Matc
         user_posts_count = {}
 
         tasks = [client.get_user_threads(user_info.user_id, page) for page in range(1, 51)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if isinstance(result, Exception):
-                continue
+        results_t: Sequence[UserThreads] = await asyncio.gather(*tasks, return_exceptions=False)
+        for result in results_t:
             if result and result.objs:
                 for thread in result.objs:
                     if thread.fid in user_posts_count:
@@ -130,10 +136,8 @@ async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Matc
                         user_posts_count[thread.fid] = 1
 
         tasks = [client.get_user_posts(user_info.user_id, page, rn=50) for page in range(1, 51)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if isinstance(result, Exception):
-                continue
+        results_p: Sequence[UserPostss] = await asyncio.gather(*tasks, return_exceptions=False)
+        for result in results_p:
             if result and result.objs:
                 for post in result.objs:
                     if post.fid in user_posts_count:
@@ -150,7 +154,15 @@ async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Matc
     user_tieba_str = "\n".join([
         f"  - {forum['tieba_name']}：{forum['experience']}经验值，等级{forum['level']}" for forum in user_tieba
     ])
-    user_info_str = f"昵称：{user_info.nick_name_new}\n旧版昵称：{nick_name_old}\n用户名：{user_info.user_name}\n贴吧ID：{user_info.tieba_uid}\nuser_id：{user_info.user_id}\nportrait：{user_info.portrait}\n吧龄：{user_info.age}年"
+    user_info_str = (
+        f"昵称：{user_info.nick_name_new}\n"
+        f"旧版昵称：{nick_name_old}\n"
+        f"用户名：{user_info.user_name}\n"
+        f"贴吧ID：{user_info.tieba_uid}\n"
+        f"user_id：{user_info.user_id}\n"
+        f"portrait：{user_info.portrait}\n"
+        f"吧龄：{user_info.age}年"
+    )
     base_content = f"基本信息：\n{user_info_str}"
     image_content = await text_to_image(
         f"{user_info.tieba_uid}关注的贴吧：\n{user_tieba_str}\n\n近期发贴的吧：\n{user_posts_count_str}"
@@ -159,26 +171,7 @@ async def checkout_handle(bot: Bot, event: GroupMessageEvent, tieba_id_str: Matc
     await checkout_cmd.finish(message=MessageSegment.text(base_content) + MessageSegment.image(image_content))
 
 
-check_posts_alc = Alconna(
-    "check_posts",
-    Args["tieba_id_str", str, Field(completion=lambda: "请输入待查询用户贴吧ID。")],
-    Args["tieba_names", MultiVar(str, "*")],
-)
-
-check_posts_cmd = on_alconna(
-    command=check_posts_alc,
-    aliases={"查发言", "查发贴"},
-    comp_config={"lite": True},
-    use_cmd_start=True,
-    use_cmd_sep=True,
-    rule=Rule(rule_signed),
-    permission=permission.GROUP,
-    priority=6,
-    block=True,
-)
-
-
-async def get_all_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, client: tb.Client):
+async def get_all_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, client: Client):
     user_info = await client.tieba_uid2user_info(tieba_id)
     user_posts = await client.get_user_posts(user_info.user_id, pn=1, rn=50)
     if not user_posts.objs:
@@ -216,7 +209,7 @@ async def get_all_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, client: 
         page += 1
 
 
-async def get_specific_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, fids: list[int], client: tb.Client):
+async def get_specific_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, fids: list[int], client: Client):
     user_info = await client.tieba_uid2user_info(tieba_id)
     pn = 1
     display_pn = 1
@@ -287,18 +280,37 @@ async def consumer(producer: Producer, check_posts_cmd: type[AlconnaMatcher]):
         display_pn += 1
 
 
+check_posts_alc = Alconna(
+    "check_posts",
+    Args["tieba_id_str", str, Field(completion=lambda: "请输入待查询用户贴吧ID。")],
+    Args["tieba_names", MultiVar(str, "*")],
+)
+
+check_posts_cmd = on_alconna(
+    command=check_posts_alc,
+    aliases={"查发言", "查发贴"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed),
+    permission=permission.GROUP,
+    priority=6,
+    block=True,
+)
+
+
 @check_posts_cmd.handle()
 async def check_posts_handle(
-    bot: Bot,
     event: GroupMessageEvent,
-    tieba_id_str: Match[str] = AlconnaMatch("tieba_id_str"),
-    tieba_names: Match[MultiVar[str]] = AlconnaMatch("tieba_names"),
+    tieba_id_str: Match[str],
+    tieba_names: Query[tuple[str, ...]] = AlconnaQuery("tieba_names", ()),
 ):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await check_posts_cmd.finish("贴吧ID格式错误，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(try_ws=True) as client:
+    assert group_info is not None  # for pylance
+    async with Client(try_ws=True) as client:
         fids = []
         if tieba_names.result:
             for tieba_name in tieba_names.result:
@@ -337,11 +349,11 @@ add_associate_data_cmd = on_alconna(
 
 
 @add_associate_data_cmd.handle()
-async def add_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T_State, tieba_id_str: Match[str]):
+async def add_associate_data_handle(event: GroupMessageEvent, state: T_State, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await add_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
-    async with tb.Client(try_ws=True) as client:
+    async with Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
     group_info = await GroupCache.get(event.group_id)
     state["user_info"] = user_info
@@ -349,12 +361,13 @@ async def add_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T
     state["text_reasons"] = []
     state["img_reasons"] = []
     await add_associate_data_cmd.send(
-        f"请输入为用户 {user_info.nick_name}({user_info.tieba_uid}) 添加的关联信息。\n输入“确认”以结束，或输入“取消”取消操作。"
+        f"请输入为用户 {user_info.nick_name}({user_info.tieba_uid}) 添加的关联信息。\n"
+        "输入“确认”以结束，或输入“取消”取消操作。"
     )
 
 
 @add_associate_data_cmd.receive("info")
-async def add_associate_data_receive(bot: Bot, state: T_State, info: GroupMessageEvent = Received("info")):
+async def add_associate_data_receive(state: T_State, info: GroupMessageEvent = Received("info")):
     user_info = state["user_info"]
     group_info = state["group_info"]
     text_reasons = state["text_reasons"]
@@ -433,14 +446,15 @@ get_associate_data_cmd = on_alconna(
 
 
 @get_associate_data_cmd.handle()
-async def get_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T_State, tieba_id_str: Match[str]):
+async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await get_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
-    async with tb.Client(try_ws=True) as client:
+    async with Client(try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
     state["user_info"] = user_info
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     state["group_info"] = group_info
     associated_data = await Associated.get_data(tieba_id, group_info.fid)
     state["associated_data"] = associated_data
@@ -470,7 +484,12 @@ async def get_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T
             + MessageSegment.image(f"base64://{img_data}")
             + f"注释：{img.note}"
         )
-    # img_datas_list = [f"{i}. [{img.upload_time.strftime("%Y-%m-%d %H:%M:%S")}]" + MessageSegment.image(f"base64://{await ImageUtils.get_image_data(img)}") + f"注释：{img.note}" for i, img in img_datas]
+    # img_datas_list = [
+    #     f"{i}. [{img.upload_time.strftime('%Y-%m-%d %H:%M:%S')}]"
+    #     + MessageSegment.image(f"base64://{await ImageUtils.get_image_data(img)}")
+    #     + f"注释：{img.note}"
+    #     for i, img in img_datas
+    # ]
     await get_associate_data_cmd.send(
         f"查询到用户 {user_info.nick_name}({user_info.tieba_uid}) 的以下关联信息：\n" + "\n".join(text_datas_list)
     )
@@ -479,14 +498,14 @@ async def get_associate_data_handle(bot: Bot, event: GroupMessageEvent, state: T
 
 
 @get_associate_data_cmd.receive("delete")
-async def get_associate_data_delete(bot: Bot, state: T_State, delete: GroupMessageEvent = Received("delete")):
+async def get_associate_data_delete(state: T_State, delete: GroupMessageEvent = Received("delete")):
     plain_text = delete.message.extract_plain_text()
     if not plain_text.startswith("/删除 "):
         await get_associate_data_cmd.finish()
     plain_text = plain_text[4:]
     try:
         ids = list(map(int, plain_text.split()))
-    except BaseException:
+    except Exception:
         await get_associate_data_cmd.reject("参数错误，请检查输入。")
     group_info = state["group_info"]
     user_info = state["user_info"]
@@ -538,13 +557,14 @@ get_last_replier_cmd = on_alconna(
 
 
 @get_last_replier_cmd.handle()
+@require_slave_BDUSS
 async def get_last_replier_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[str]):
-    await check_slave_BDUSS(event, get_last_replier_cmd)
-    thread_id = await handle_thread_url(thread_url.result)
+    thread_id = handle_thread_url(thread_url.result)
     if not thread_id:
         await get_last_replier_cmd.finish("无法解析链接，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
-    async with tb.Client(try_ws=True) as client:
+    assert group_info is not None  # for pylance
+    async with Client(try_ws=True) as client:
         threads = await client.get_last_replyers(group_info.fname, rn=50)
         for thread in threads.objs:
             if thread.tid == thread_id:

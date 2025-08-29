@@ -1,8 +1,7 @@
-import aiotieba as tb
 from arclet.alconna import Alconna, Args, MultiVar
 from nonebot import get_plugin_config, on_request, require
-from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import (
+    Bot,
     FriendRequestEvent,
     GroupMessageEvent,
     PrivateMessageEvent,
@@ -11,9 +10,10 @@ from nonebot.adapters.onebot.v11 import (
 from nonebot.params import Received
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
-from nonebot_plugin_alconna import At, Field, Match, on_alconna
+from nonebot_plugin_alconna import AlconnaQuery, Arparma, At, Field, Match, Query, on_alconna
 
 from logger import log
+from src.common import Client
 from src.db import GroupCache, GroupInfo
 from src.utils import (
     get_user_name,
@@ -41,7 +41,7 @@ config = get_plugin_config(Config)
 
 sign_alc = Alconna(
     "sign",
-    Args["tieba_name", str, Field(completion=lambda: "请输入贴吧名")],
+    Args["tieba_name_str", str, Field(completion=lambda: "请输入贴吧名")],
 )
 
 sign_cmd = on_alconna(
@@ -58,14 +58,15 @@ sign_cmd = on_alconna(
 
 
 @sign_cmd.handle()
-async def handle_sign(bot: Bot, event: GroupMessageEvent, tieba_name: Match[str]):
+async def handle_sign(event: GroupMessageEvent, tieba_name_str: Match[str]):
     if (group_info := await GroupCache.get(event.group_id)) is not None:
         await sign_cmd.finish(f"本群已被初始化为{group_info.fname}吧管理群，如需更改请使用重置指令")
-    tieba_name = tieba_name.result.removesuffix("吧")
-    async with tb.Client() as client:
+    tieba_name = tieba_name_str.result.removesuffix("吧")
+    async with Client() as client:
         fid = await client.get_fid(tieba_name)
     if fid == 0:
         await sign_cmd.finish(f"贴吧 {tieba_name}吧 不存在，请检查拼写")
+    assert event.sender.user_id is not None  # for pylance
     group_info = GroupInfo(group_id=event.group_id, master=event.sender.user_id, fid=int(fid), fname=tieba_name)
     try:
         await GroupCache.add(group_info)
@@ -75,7 +76,9 @@ async def handle_sign(bot: Bot, event: GroupMessageEvent, tieba_name: Match[str]
         await sign_cmd.finish("初始化失败，请联系bot管理员。")
     else:
         await sign_cmd.finish(
-            "初始化成功，吧主权限已自动分配给群主，请根据用户手册完善其他信息。初始化完成后，视为您理解并同意使用手册中的用户协议内容。\n如果您不同意或未来撤回同意，请使用 /重置 指令。"
+            "初始化成功，吧主权限已自动分配给群主，请根据用户手册完善其他信息。\n"
+            "初始化完成后，视为您理解并同意使用手册中的用户协议内容。\n"
+            "如果您不同意或未来撤回同意，请使用 /重置 指令。"
         )
 
 
@@ -101,6 +104,7 @@ master_cmd = on_alconna(
 async def handle_master(bot: Bot, event: GroupMessageEvent, master_user: Match[At]):
     master_user_id = int(master_user.result.target)
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     if group_info.master == master_user_id:
         await master_cmd.finish("你已经是吧主啦，无需重复设置。")
     await GroupCache.update(event.group_id, master=master_user_id)
@@ -130,7 +134,9 @@ reset_cmd = on_alconna(
 @reset_cmd.handle()
 async def handle_reset(bot: Bot, event: GroupMessageEvent):
     await reset_cmd.send(
-        "重置操作将删除本群的权限设置、BDUSS等配置信息，循封名单、关联信息将会保留，如果管理群或贴吧改变可联系bot管理员操作转移或导出。\n\n请认真阅读以上说明，确定重置请发送“确定”，取消请发送任意内容。"
+        "重置操作将删除本群的权限设置、BDUSS等配置信息，循封名单、关联信息将会保留，"
+        "如果管理群或贴吧改变可联系bot管理员操作转移或导出。\n\n"
+        "请认真阅读以上说明，确定重置请发送“确定”，取消请发送任意内容。"
     )
 
 
@@ -161,8 +167,11 @@ set_admin_cmd = on_alconna(
 
 
 @set_admin_cmd.handle()
-async def handle_set_admin(bot: Bot, event: GroupMessageEvent, admin_users: Match[MultiVar[At]]):
+async def handle_set_admin(
+    bot: Bot, event: GroupMessageEvent, admin_users: Query[tuple[At, ...]] = AlconnaQuery("admin_users", ())
+):
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     succeed = []
     failed = []
     users = [int(admin_user.target) for admin_user in admin_users.result]
@@ -215,7 +224,8 @@ remove_admin_alc = Alconna(
         "admin_users",
         MultiVar(str, "+"),
         Field(
-            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的admin权限账号。考虑到特殊情况，本操作不支持通过艾特进行。"
+            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的admin权限账号。"
+            "考虑到特殊情况，本操作不支持通过艾特进行。"
         ),
     ],
 )
@@ -234,12 +244,15 @@ remove_admin_cmd = on_alconna(
 
 
 @remove_admin_cmd.handle()
-async def handle_remove_admin(bot: Bot, event: GroupMessageEvent, admin_users: Match[MultiVar[str]]):
+async def handle_remove_admin(
+    bot: Bot, event: GroupMessageEvent, admin_users: Query[tuple[At, ...]] = AlconnaQuery("admin_users", ())
+):
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     succeed = []
     failed = []
     try:
-        users = [int(admin_user) for admin_user in admin_users.result]
+        users = [int(admin_user.target) for admin_user in admin_users.result]
     except ValueError:
         await remove_admin_cmd.finish("无效的账号，请检查输入。")
     for admin_user_id in users:
@@ -281,8 +294,11 @@ set_moderator_cmd = on_alconna(
 
 
 @set_moderator_cmd.handle()
-async def handle_set_moderator(bot: Bot, event: GroupMessageEvent, moderator_users: Match[MultiVar[At]]):
+async def handle_set_moderator(
+    bot: Bot, event: GroupMessageEvent, moderator_users: Query[tuple[At, ...]] = AlconnaQuery("moderator_users", ())
+):
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     succeed = []
     failed = []
     try:
@@ -341,7 +357,8 @@ remove_moderator_alc = Alconna(
         "moderator_users",
         MultiVar(str, "+"),
         Field(
-            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的moderator权限账号。考虑到特殊情况，本操作不支持通过艾特进行。"
+            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的moderator权限账号。"
+            "考虑到特殊情况，本操作不支持通过艾特进行。"
         ),
     ],
 )
@@ -360,12 +377,15 @@ remove_moderator_cmd = on_alconna(
 
 
 @remove_moderator_cmd.handle()
-async def handle_remove_moderator(bot: Bot, event: GroupMessageEvent, moderator_users: Match[MultiVar[str]]):
+async def handle_remove_moderator(
+    bot: Bot, event: GroupMessageEvent, moderator_users: Query[tuple[At, ...]] = AlconnaQuery("moderator_users", ())
+):
     group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
     succeed = []
     failed = []
     try:
-        users = [int(moderator_user) for moderator_user in moderator_users.result]
+        users = [int(moderator_user.target) for moderator_user in moderator_users.result]
     except ValueError:
         await remove_moderator_cmd.finish("无效的账号，请检查输入。")
     for moderator_user_id in users:
@@ -390,13 +410,13 @@ async def handle_remove_moderator(bot: Bot, event: GroupMessageEvent, moderator_
 
 set_BDUSS_alc = Alconna(  # noqa: N816
     "set_BDUSS",
-    Args["group_id", str, Field(completion=lambda: "请输入群号")],
+    Args["group_id_str", str, Field(completion=lambda: "请输入群号")],
     Args["BDUSS_str", str, Field(completion=lambda: "请输入BDUSS，删除BDUSS请输入“确认删除”")],
 )
 
 set_BDUSS_cmd = on_alconna(  # noqa: N816
     command=set_BDUSS_alc,
-    aliases={"设置BDUSS", "删除BDUSS"},
+    aliases={"设置BDUSS", "删除BDUSS", "设置STOKEN", "删除STOKEN"},
     comp_config={"lite": True},
     use_cmd_start=True,
     use_cmd_sep=True,
@@ -407,10 +427,15 @@ set_BDUSS_cmd = on_alconna(  # noqa: N816
 
 
 @set_BDUSS_cmd.handle()
-async def handle_set_BDUSS(bot: Bot, event: PrivateMessageEvent, group_id: Match[str], BDUSS_str: Match[str]):  # noqa: N802, N803
-    BDUSS = "" if BDUSS_str.result == "确认删除" else BDUSS_str.result  # noqa: N806
+async def handle_set_BDUSS(  # noqa: N802
+    event: PrivateMessageEvent,
+    group_id_str: Match[str],
+    BDUSS_str: Match[str],  # noqa: N803
+    args: Arparma,
+):
+    value = "" if BDUSS_str.result == "确认删除" else BDUSS_str.result  # noqa: N806
     try:
-        group_id = int(group_id.result)
+        group_id = int(group_id_str.result)
     except ValueError:
         await set_BDUSS_cmd.finish("无效的群号，请检查输入。")
     group_info = await GroupCache.get(group_id)
@@ -418,15 +443,20 @@ async def handle_set_BDUSS(bot: Bot, event: PrivateMessageEvent, group_id: Match
         await set_BDUSS_cmd.finish("该群未初始化或群号错误，请检查输入。")
     if event.sender.user_id not in [group_info.master, *group_info.admins, *group_info.moderators]:
         await set_BDUSS_cmd.finish("您没有该群的吧主、admin或moderator权限。")
-    async with tb.Client(BDUSS) as client:
-        if BDUSS and not await client.get_self_info():
-            await set_BDUSS_cmd.finish("BDUSS无效，请检查输入。")
-    if event.sender.user_id == group_info.master:
-        await GroupCache.update(group_id, master_BDUSS=BDUSS)
-        await set_BDUSS_cmd.finish(f"吧主BDUSS{'设置' if BDUSS else '删除'}成功。")
+    cmd = args.context["$shortcut.regex_match"].group()[1:]
+    if "BDUSS" in cmd:
+        async with Client(value) as client:
+            if value and not await client.get_self_info():
+                await set_BDUSS_cmd.finish("BDUSS无效，请检查输入。")
+        if event.sender.user_id == group_info.master:
+            await GroupCache.update(group_id, master_BDUSS=value)
+            await set_BDUSS_cmd.finish(f"吧主BDUSS{'设置' if value else '删除'}成功。")
+        else:
+            await GroupCache.update(group_id, slave_BDUSS=value)
+            await set_BDUSS_cmd.finish(f"吧务BDUSS{'设置' if value else '删除'}成功。")
     else:
-        await GroupCache.update(group_id, slave_BDUSS=BDUSS)
-        await set_BDUSS_cmd.finish(f"吧务BDUSS{'设置' if BDUSS else '删除'}成功。")
+        await GroupCache.update(group_id, STOKEN=value)
+        await set_BDUSS_cmd.finish(f"吧务STOKEN{'设置' if value else '删除'}成功。")
 
 
 set_appeal_deny_reason_alc = Alconna(
@@ -448,7 +478,7 @@ set_appeal_deny_reason_cmd = on_alconna(
 
 
 @set_appeal_deny_reason_cmd.handle()
-async def handle_set_appeal_deny_reason(bot: Bot, event: GroupMessageEvent, reason: Match[str]):
+async def handle_set_appeal_deny_reason(event: GroupMessageEvent, reason: Match[str]):
     if len(reason.result) < 5:
         await set_appeal_deny_reason_cmd.finish("拒绝理由至少需要5个字符。")
     await GroupCache.update(event.group_id, appeal_deny_reason=reason.result)

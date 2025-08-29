@@ -27,7 +27,7 @@ class ImageUtils:
         try:
             image_doc = await ImageDocument.get(ObjectId(img_data.image_id))
             return image_doc.img if image_doc else None
-        except BaseException:
+        except Exception:
             return None
 
     @staticmethod
@@ -38,6 +38,6 @@ class ImageUtils:
             if image_doc:
                 await image_doc.delete()
                 return True
-        except BaseException:
+        except Exception:
             pass
         return False
