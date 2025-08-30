@@ -40,6 +40,7 @@ from src.utils import (
     handle_thread_url,
     handle_tieba_uid,
     require_slave_BDUSS,
+    require_STOKEN,
     rule_signed,
     text_to_image,
 )
@@ -593,3 +594,93 @@ async def get_last_replier_handle(bot: Bot, event: GroupMessageEvent, thread_url
                 driver.task_group.start_soon(handle_event, bot, new_event)
                 await get_last_replier_cmd.finish()
         await get_last_replier_cmd.finish("未查询到该贴子。")
+
+
+check_ban_alc = Alconna(
+    "check_ban",
+    Args["tieba_id_str", str, Field(completion=lambda: "请输入待查询用户贴吧ID。")],
+)
+
+check_ban_cmd = on_alconna(
+    command=check_ban_alc,
+    aliases={"查封禁"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed),
+    permission=permission.GROUP,
+    priority=6,
+    block=True,
+)
+
+
+@check_ban_cmd.handle()
+@require_STOKEN
+async def check_ban_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
+    tieba_id = await handle_tieba_uid(tieba_id_str.result)
+    if not tieba_id:
+        await check_ban_cmd.finish("贴吧ID格式错误，请检查输入。")
+    await check_ban_cmd.send("正在查询...")
+    group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
+    async with Client(group_info.slave_BDUSS, group_info.slave_STOKEN, try_ws=True) as client:
+        user_info_tuid = await client.tieba_uid2user_info(tieba_id)
+        user_info = await client.get_user_info(user_info_tuid.user_id, require=ReqUInfo.BASIC)
+        search_value = user_info.user_name or user_info.nick_name_old
+        if not search_value:
+            await check_ban_cmd.finish("无法查询到该用户的用户名或旧版昵称。")
+        ban_info = await client.get_bawu_userlogs(group_info.fid, search_value=search_value)
+    if not ban_info.objs:
+        await check_ban_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无封禁记录。")
+    user_logs = []
+    for info in ban_info.objs[:10]:
+        ban_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M:%S')} - {info.op_type}"
+        if info.op_type == "封禁":
+            ban_str += f" - {info.op_duration}天"
+        ban_str += f" - 操作人：{info.op_user_name}"
+        user_logs.append(ban_str)
+    await check_ban_cmd.send("\n".join(user_logs))
+
+
+check_delete_alc = Alconna(
+    "check_delete",
+    Args["tieba_id_str", str, Field(completion=lambda: "请输入待查询用户贴吧ID。")],
+)
+
+check_delete_cmd = on_alconna(
+    command=check_delete_alc,
+    aliases={"查删贴", "查删帖"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed),
+    permission=permission.GROUP,
+    priority=6,
+    block=True,
+)
+
+
+@check_delete_cmd.handle()
+@require_STOKEN
+async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
+    tieba_id = await handle_tieba_uid(tieba_id_str.result)
+    if not tieba_id:
+        await check_delete_cmd.finish("贴吧ID格式错误，请检查输入。")
+    await check_delete_cmd.send("正在查询...")
+    group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
+    async with Client(group_info.slave_BDUSS, group_info.slave_STOKEN, try_ws=True) as client:
+        user_info_tuid = await client.tieba_uid2user_info(tieba_id)
+        user_info = await client.get_user_info(user_info_tuid.user_id, require=ReqUInfo.BASIC)
+        search_value = user_info.user_name or user_info.nick_name_old
+        if not search_value:
+            await check_delete_cmd.finish("无法查询到该用户的用户名或旧版昵称。")
+        delete_info = await client.get_bawu_postlogs(group_info.fid, search_value=search_value)
+    if not delete_info.objs:
+        await check_delete_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无删贴记录。")
+    user_logs = []
+    for info in delete_info.objs[:10]:
+        delete_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M:%S')} - {info.op_type}"
+        delete_str += f" - 操作人：{info.op_user_name}"
+        user_logs.append(delete_str)
+    await check_delete_cmd.send("\n".join(user_logs))
