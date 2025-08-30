@@ -10,7 +10,7 @@ from nonebot.adapters.onebot.v11 import (
 from nonebot.params import Received
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
-from nonebot_plugin_alconna import AlconnaQuery, Arparma, At, Field, Match, Query, on_alconna
+from nonebot_plugin_alconna import AlconnaQuery, Arparma, At, Field, Match, Query, UniMessage, on_alconna
 
 from logger import log
 from src.common import Client
@@ -411,7 +411,6 @@ async def handle_remove_moderator(
 set_BDUSS_alc = Alconna(  # noqa: N816
     "set_BDUSS",
     Args["group_id_str", str, Field(completion=lambda: "请输入群号")],
-    Args["BDUSS_str", str, Field(completion=lambda: "请输入BDUSS，删除BDUSS请输入“确认删除”")],
 )
 
 set_BDUSS_cmd = on_alconna(  # noqa: N816
@@ -430,12 +429,10 @@ set_BDUSS_cmd = on_alconna(  # noqa: N816
 async def handle_set_BDUSS(  # noqa: N802
     event: PrivateMessageEvent,
     group_id_str: Match[str],
-    BDUSS_str: Match[str],  # noqa: N803
     args: Arparma,
 ):
-    value = "" if BDUSS_str.result == "确认删除" else BDUSS_str.result  # noqa: N806
     try:
-        group_id = int(group_id_str.result)
+        group_id = int(group_id_str.result.strip())
     except ValueError:
         await set_BDUSS_cmd.finish("无效的群号，请检查输入。")
     group_info = await GroupCache.get(group_id)
@@ -444,19 +441,35 @@ async def handle_set_BDUSS(  # noqa: N802
     if event.sender.user_id not in [group_info.master, *group_info.admins, *group_info.moderators]:
         await set_BDUSS_cmd.finish("您没有该群的吧主、admin或moderator权限。")
     cmd = args.context["$shortcut.regex_match"].group()[1:]
-    if "BDUSS" in cmd:
-        async with Client(value) as client:
-            if value and not await client.get_self_info():
-                await set_BDUSS_cmd.finish("BDUSS无效，请检查输入。")
-        if event.sender.user_id == group_info.master:
-            await GroupCache.update(group_id, master_BDUSS=value)
-            await set_BDUSS_cmd.finish(f"吧主BDUSS{'设置' if value else '删除'}成功。")
+    if "设置" in cmd:
+        msg: UniMessage | None = await set_BDUSS_cmd.prompt(f"请输入{cmd[2:]}")
+        if not msg:
+            await set_BDUSS_cmd.finish("无效的输入。")
+        value = str(msg).strip()
+        if "BDUSS" in cmd:
+            async with Client(value) as client:
+                if not await client.get_self_info():
+                    await set_BDUSS_cmd.finish("BDUSS无效，请检查输入。")
+            if event.sender.user_id == group_info.master:
+                await GroupCache.update(group_id, master_BDUSS=value)
+                await set_BDUSS_cmd.finish("吧主BDUSS设置成功。")
+            else:
+                await GroupCache.update(group_id, slave_BDUSS=value)
+                await set_BDUSS_cmd.finish("吧务BDUSS设置成功。")
         else:
-            await GroupCache.update(group_id, slave_BDUSS=value)
-            await set_BDUSS_cmd.finish(f"吧务BDUSS{'设置' if value else '删除'}成功。")
-    else:
-        await GroupCache.update(group_id, STOKEN=value)
-        await set_BDUSS_cmd.finish(f"吧务STOKEN{'设置' if value else '删除'}成功。")
+            await GroupCache.update(group_id, slave_STOKEN=value)
+            await set_BDUSS_cmd.finish("吧务STOKEN设置成功。")
+    elif "删除" in cmd:
+        if "BDUSS" in cmd:
+            if event.sender.user_id == group_info.master:
+                await GroupCache.update(group_id, master_BDUSS="")
+                await set_BDUSS_cmd.finish("吧主BDUSS删除成功。")
+            else:
+                await GroupCache.update(group_id, slave_BDUSS="")
+                await set_BDUSS_cmd.finish("吧务BDUSS删除成功。")
+        else:
+            await GroupCache.update(group_id, slave_STOKEN="")
+            await set_BDUSS_cmd.finish("吧务STOKEN删除成功。")
 
 
 set_appeal_deny_reason_alc = Alconna(
