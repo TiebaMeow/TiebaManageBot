@@ -493,8 +493,9 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
     await get_associate_data_cmd.send(
         f"查询到用户 {user_info.nick_name}({user_info.tieba_uid}) 的以下关联信息：\n" + "\n".join(text_datas_list)
     )
-    img_msg = MessageSegment.text("\n").join(img_datas_list)
-    await get_associate_data_cmd.send(img_msg)
+    if img_datas_list:
+        img_msg = MessageSegment.text("\n").join(img_datas_list)
+        await get_associate_data_cmd.send(img_msg)
 
 
 @get_associate_data_cmd.receive("delete")

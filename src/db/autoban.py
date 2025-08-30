@@ -11,7 +11,7 @@ __all__ = ["AutoBanList"]
 
 class AutoBanList:
     @staticmethod
-    async def add_ban(group_id: int, fid: int, operator: int, user_info: UserInfo, ban_reason: BanReason) -> bool:
+    async def add_ban(group_id: int, fid: int, user_info: UserInfo, ban_reason: BanReason) -> bool:
         ban_list = await BanList.find_one(BanList.group_id == group_id, BanList.fid == fid)
         if not ban_list:
             ban_list = BanList(group_id=group_id, fid=fid)
@@ -44,10 +44,11 @@ class AutoBanList:
         if not ban_list:
             return "not", None
         if user_id in ban_list.ban_list:
-            if ban_list.ban_list[user_id].enable:
-                return "banned", ban_list.ban_list[user_id]
+            ban_reason = ban_list.ban_list[user_id]
+            if ban_reason.enable:
+                return "banned", ban_reason
             else:
-                return "unbanned", ban_list.ban_list[user_id]
+                return "unbanned", ban_reason
         return "not", None
 
     @staticmethod

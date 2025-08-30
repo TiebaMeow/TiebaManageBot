@@ -1,35 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from functools import wraps
 from inspect import iscoroutinefunction as awaitable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import aiotieba as tb
-from aiolimiter import AsyncLimiter
 from aiotieba.exception import HTTPStatusError, TiebaServerError
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt
 from tenacity.wait import wait_exponential_jitter
 
 from logger import log
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
 
 class Client(tb.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._limiter = AsyncLimiter(5.0, 1.0)
-        self._semaphore = asyncio.Semaphore(5)
         self._rl_wrapper_cache: dict[str, Any] = {}
-
-    @asynccontextmanager
-    async def _rate_limiter(self) -> AsyncGenerator[None, None]:
-        async with self._limiter:
-            async with self._semaphore:
-                yield
 
     def __getattribute__(self, name: str) -> Any:
         _oget = object.__getattribute__
@@ -48,42 +35,42 @@ class Client(tb.Client):
 
         @wraps(attr)
         async def rate_limited_wrapper(*args, **kwargs) -> Any:
-            async with _oget(self, "_rate_limiter")():
-                try:
-                    async for attempt in AsyncRetrying(
-                        stop=stop_after_attempt(3),
-                        wait=wait_exponential_jitter(initial=0.5, max=3.0),
-                        retry=retry_if_exception_type((
-                            asyncio.TimeoutError,
-                            ConnectionError,
-                            OSError,
-                            HTTPStatusError,
-                            TiebaServerError,
-                        )),
-                        reraise=True,
-                    ):
-                        with attempt:
-                            ret = await attr(*args, **kwargs)
-                            err = getattr(ret, "err", None)
-                            if err and isinstance(err, (HTTPStatusError, TiebaServerError)):
-                                code = getattr(err, "code", None)
-                                if code is not None and code in {
-                                    -65536,
-                                    11,
-                                    77,
-                                    408,
-                                    429,
-                                    4011,
-                                    110001,
-                                    220034,
-                                    230871,
-                                    1989005,
-                                    2210002,
-                                }:
-                                    raise err
-                            return ret
-                except Exception as e:
-                    log.exception(f"{name}: {e}")
+            try:
+                async for attempt in AsyncRetrying(
+                    stop=stop_after_attempt(3),
+                    wait=wait_exponential_jitter(initial=0.5, max=3.0),
+                    retry=retry_if_exception_type((
+                        asyncio.TimeoutError,
+                        ConnectionError,
+                        OSError,
+                        HTTPStatusError,
+                        TiebaServerError,
+                    )),
+                    reraise=True,
+                ):
+                    with attempt:
+                        ret = await attr(*args, **kwargs)
+                        err = getattr(ret, "err", None)
+                        if err and isinstance(err, (HTTPStatusError, TiebaServerError)):
+                            code = getattr(err, "code", None)
+                            if code is not None and code in {
+                                -65536,
+                                11,
+                                77,
+                                408,
+                                429,
+                                4011,
+                                110001,
+                                220034,
+                                230871,
+                                1989005,
+                                2210002,
+                                28113295,
+                            }:
+                                raise err
+                        return ret
+            except Exception as e:
+                log.exception(f"{name}: {e}")
 
         if isinstance(cache, dict):
             cache[name] = rate_limited_wrapper

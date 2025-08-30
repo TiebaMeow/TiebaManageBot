@@ -285,12 +285,12 @@ async def add_autoban_handle(
     state["img_reasons"] = []
     current_user = user_infos[0]
     state["current_user"] = current_user
-    await add_autoban_cmd.send(
-        "单条消息支持文字、图片或文字+图片格式，"
-        "若为文字+图片格式则文字将自动添加为该消息内临近图片的注释，不计入文字段数限制。"
-        "图片最大支持10MB，最多支持10段文字和10张图片，任一格式溢出时将截断并自动确认操作。"
-        "支持确认后再补充和修改循封原因。"
-    )
+    # await add_autoban_cmd.send(
+    #     "单条消息支持文字、图片或文字+图片格式，"
+    #     "若为文字+图片格式则文字将自动添加为该消息内临近图片的注释，不计入文字段数限制。"
+    #     "图片最大支持10MB，最多支持10段文字和10张图片，任一格式溢出时将截断并自动确认操作。"
+    #     "支持确认后再补充和修改循封原因。"
+    # )
     is_banned, ban_reason = await AutoBanList.ban_status(group_info.group_id, group_info.fid, current_user.user_id)
     if is_banned == "banned":
         await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 已在循封列表中。")
@@ -318,7 +318,7 @@ async def add_autoban_handle(
 
 
 @add_autoban_cmd.receive("input")
-async def add_autoban_input(bot: Bot, state: T_State, input_: GroupMessageEvent = Received("input")):
+async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received("input")):
     group_info: GroupInfo = state["group_info"]
     user_infos: list[UserInfo] = state["user_infos"]
     current_user: UserInfo | None = state.get("current_user", None)
@@ -362,9 +362,7 @@ async def add_autoban_input(bot: Bot, state: T_State, input_: GroupMessageEvent 
             text_reason=text_reasons,
             img_reason=img_reasons,
         )
-        result = await AutoBanList.add_ban(
-            group_info.group_id, group_info.fid, input_.user_id, current_user, ban_reason
-        )
+        result = await AutoBanList.add_ban(group_info.group_id, group_info.fid, current_user, ban_reason)
         if not result:
             await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 添加至循封列表失败。")
         else:
@@ -533,7 +531,7 @@ delete_ban_reason_cmd = on_alconna(
 
 
 @delete_ban_reason_cmd.handle()
-async def delete_ban_reason_handle(bot: Bot, event: GroupMessageEvent, state: T_State, tieba_uid_str: Match[str]):
+async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_uid_str: Match[str]):
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     tieba_uid = await handle_tieba_uid(tieba_uid_str.result)
@@ -568,17 +566,18 @@ async def delete_ban_reason_handle(bot: Bot, event: GroupMessageEvent, state: T_
     #     for i, img in img_reasons
     # ]
     await delete_ban_reason_cmd.send(
-        f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因：" + "\n".join(text_reasons_list)
+        f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因：\n" + "\n".join(text_reasons_list)
     )
-    img_msg = MessageSegment.text("\n").join(img_reasons_list)
-    await delete_ban_reason_cmd.send(img_msg)
+    if img_reasons_list:
+        img_msg = MessageSegment.text("\n").join(img_reasons_list)
+        await delete_ban_reason_cmd.send(img_msg)
     await delete_ban_reason_cmd.send(
         "请输入需要删除的条目序号，多个序号以空格分隔。输入“全部”以清空条目，“取消”以取消操作。"
     )
 
 
 @delete_ban_reason_cmd.receive("input")
-async def delete_ban_reason_input(bot: Bot, state: T_State, input_: GroupMessageEvent = Received("input")):
+async def delete_ban_reason_input(state: T_State, input_: GroupMessageEvent = Received("input")):
     plain_text = input_.message.extract_plain_text()
     if plain_text == "取消":
         await delete_ban_reason_cmd.finish("操作已取消。")
@@ -590,7 +589,11 @@ async def delete_ban_reason_input(bot: Bot, state: T_State, input_: GroupMessage
             text_reason=[],
             img_reason=[],
         )
-        await AutoBanList.update_ban_reason(group_info.group_id, group_info.fid, user_info, empty_ban_reason)
+        result = await AutoBanList.update_ban_reason(group_info.group_id, group_info.fid, user_info, empty_ban_reason)
+        if result:
+            await delete_ban_reason_cmd.finish("操作完成。")
+        else:
+            await delete_ban_reason_cmd.finish("数据库操作失败。")
     ids = plain_text.split()
     try:
         ids = list(map(int, ids))
@@ -747,7 +750,7 @@ get_ban_reason_cmd = on_alconna(
 
 
 @get_ban_reason_cmd.handle()
-async def get_ban_reason_handle(bot: Bot, event: GroupMessageEvent, tieba_uid_str: Match[str]):
+async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[str]):
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     tieba_uid = await handle_tieba_uid(tieba_uid_str.result)
@@ -785,6 +788,7 @@ async def get_ban_reason_handle(bot: Bot, event: GroupMessageEvent, tieba_uid_st
     await get_ban_reason_cmd.send(
         f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因：\n" + "\n".join(text_reasons_list)
     )
-    img_msg = MessageSegment.text("\n").join(img_reasons_list)
-    await get_ban_reason_cmd.send(img_msg)
+    if img_reasons_list:
+        img_msg = MessageSegment.text("\n").join(img_reasons_list)
+        await get_ban_reason_cmd.send(img_msg)
     await get_ban_reason_cmd.finish()
