@@ -3,6 +3,7 @@ import base64
 import operator
 import ssl
 import time
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -679,8 +680,16 @@ async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]
     if not delete_info.objs:
         await check_delete_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无删贴记录。")
     user_logs = []
-    for info in delete_info.objs[:10]:
+    last_info = list(filter(lambda x: x.op_time > datetime.now() - timedelta(days=30), delete_info.objs))
+    if not last_info:
+        await check_delete_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无30天内删贴记录。")
+    last_info = last_info[:10]
+    for info in last_info:
         delete_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M:%S')} - {info.op_type}"
+        text = info.text or info.title
+        if len(text) > 20:
+            text = text[:20] + "……"
+        delete_str += f" - {text}"
         delete_str += f" - 操作人：{info.op_user_name}"
         user_logs.append(delete_str)
     await check_delete_cmd.send("\n".join(user_logs))
