@@ -71,6 +71,7 @@ class Client(tb.Client):
                         return ret
             except Exception as e:
                 log.exception(f"{name}: {e}")
+                return await attr(*args, **kwargs)
 
         if isinstance(cache, dict):
             cache[name] = retry_wrapper
