@@ -1,3 +1,8 @@
+import base64
+import ssl
+from typing import Literal
+
+import httpx
 from bson import ObjectId
 
 from .modules import ImageDocument, ImgData
@@ -5,6 +10,25 @@ from .modules import ImageDocument, ImgData
 
 class ImageUtils:
     """图片操作工具类"""
+
+    context: ssl.SSLContext | None = None
+
+    @classmethod
+    async def download_and_save_img(
+        cls, url: str, uploader_id: int, fid: int, note: str = ""
+    ) -> ImgData | Literal[-1, -2]:
+        """下载图片并保存"""
+        if cls.context is None:
+            cls.context = ssl.create_default_context()
+            cls.context.set_ciphers("DEFAULT")
+        async with httpx.AsyncClient(verify=cls.context) as session:
+            resp = await session.get(url)
+            if resp.status_code != 200:
+                return -1
+            if len(resp.content) > 10 * 1024 * 1024:
+                return -2
+            img_base64 = base64.b64encode(resp.content).decode()
+            return await cls.save_image(uploader_id, fid, img_base64, note)
 
     @staticmethod
     async def save_image(uploader_id: int, fid: int, img_base64: str, note: str = "") -> ImgData:

@@ -1,12 +1,9 @@
 import asyncio
-import base64
-import ssl
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-import httpx
 from arclet.alconna import Alconna, Args, MultiVar
-from nonebot import get_plugin_config, require
+from nonebot import get_plugin_config
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment, permission
 from nonebot.params import Received
@@ -41,9 +38,6 @@ from .config import Config
 
 if TYPE_CHECKING:
     from aiotieba.typing import UserInfo
-
-require("nonebot_plugin_alconna")
-
 
 __plugin_meta__ = PluginMetadata(
     name="special",
@@ -405,23 +399,14 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
-            context = ssl.create_default_context()
-            context.set_ciphers("DEFAULT")
-            async with httpx.AsyncClient(verify=context) as http_client:
-                rsp = await http_client.get(segment.data["url"])
-                if rsp.status_code != 200:
-                    await add_autoban_cmd.reject("图片下载失败，请尝试重新发送。")
-                    continue
-                elif len(rsp.content) > 1024 * 1024 * 10:
-                    await add_autoban_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-                    continue
-                img_data = await ImageUtils.save_image(
-                    uploader_id=input_.user_id,
-                    fid=group_info.fid,
-                    img_base64=base64.b64encode(rsp.content).decode(),
-                    note="",
-                )
-                img_reason = img_data
+            img_data = await ImageUtils.download_and_save_img(
+                url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
+            )
+            if img_data == -1:
+                await add_autoban_cmd.reject("图片下载失败，请尝试重新发送。")
+            elif img_data == -2:
+                await add_autoban_cmd.reject("图片过大，请尝试取消勾选“原图”。")
+            img_reason = img_data
             if text_buffer:
                 note = text_buffer.pop()
                 img_reason.note = note
@@ -698,23 +683,14 @@ async def add_ban_reason_input(state: T_State, input_: GroupMessageEvent = Recei
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
-            context = ssl.create_default_context()
-            context.set_ciphers("DEFAULT")
-            async with httpx.AsyncClient(verify=context) as http_client:
-                rsp = await http_client.get(segment.data["url"])
-                if rsp.status_code != 200:
-                    await add_ban_reason_cmd.reject("图片下载失败，请尝试重新发送。")
-                    continue
-                elif len(rsp.content) > 1024 * 1024 * 10:
-                    await add_ban_reason_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-                    continue
-                img_data = await ImageUtils.save_image(
-                    uploader_id=input_.user_id,
-                    fid=group_info.fid,
-                    img_base64=base64.b64encode(rsp.content).decode(),
-                    note="",
-                )
-                img_reason = img_data
+            img_data = await ImageUtils.download_and_save_img(
+                url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
+            )
+            if img_data == -1:
+                await add_ban_reason_cmd.reject("图片下载失败，请尝试重新发送。")
+            elif img_data == -2:
+                await add_ban_reason_cmd.reject("图片过大，请尝试取消勾选“原图”。")
+            img_reason = img_data
             if text_buffer:
                 note = text_buffer.pop()
                 img_reason.note = note

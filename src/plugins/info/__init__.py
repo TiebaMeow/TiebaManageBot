@@ -1,17 +1,14 @@
 import asyncio
-import base64
 import operator
-import ssl
 import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import aiohttp
 import httpx
 from aiotieba import ReqUInfo
 from arclet.alconna import Alconna, Args, MultiVar
 from bs4 import BeautifulSoup
-from nonebot import get_driver, get_plugin_config, require
+from nonebot import get_driver, get_plugin_config
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -53,8 +50,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
-
-require("nonebot_plugin_alconna")
 
 
 __plugin_meta__ = PluginMetadata(
@@ -105,21 +100,22 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
             ]
         elif user_info.user_name:
             try:
-                async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-                    async with session.get(f"https://82cat.com/tieba/forum/{user_info.user_name}/1") as resp:
-                        html = await resp.text()
-                        soup = BeautifulSoup(html, "lxml")
-                        table = soup.find("table", class_="table table-hover")
-                        tbody = table.find("tbody")  # type: ignore
-                        rows = tbody.find_all("tr")  # type: ignore
-                        user_tieba = [
-                            {
-                                "tieba_name": row.find_all("td")[0].text.strip(),  # type: ignore
-                                "experience": row.find_all("td")[1].text.strip(),  # type: ignore
-                                "level": row.find_all("td")[2].text.strip(),  # type: ignore
-                            }
-                            for row in rows
-                        ]
+                async with httpx.AsyncClient(verify=False, timeout=5) as session:
+                    resp = await session.get(f"https://82cat.com/tieba/forum/{user_info.user_name}/1")
+                    resp.raise_for_status()
+                    html = resp.text
+                soup = BeautifulSoup(html, "lxml")
+                table = soup.find("table", class_="table table-hover")
+                tbody = table.find("tbody")  # type: ignore
+                rows = tbody.find_all("tr")  # type: ignore
+                user_tieba = [
+                    {
+                        "tieba_name": row.find_all("td")[0].text.strip(),  # type: ignore
+                        "experience": row.find_all("td")[1].text.strip(),  # type: ignore
+                        "level": row.find_all("td")[2].text.strip(),  # type: ignore
+                    }
+                    for row in rows
+                ]
             except Exception:
                 user_tieba = []
         else:
@@ -394,23 +390,14 @@ async def add_associate_data_receive(state: T_State, info: GroupMessageEvent = R
             else:
                 text_buffer.append(seg.data["text"])
         elif seg.type == "image":
-            context = ssl.create_default_context()
-            context.set_ciphers("DEFAULT")
-            async with httpx.AsyncClient(verify=context) as http_client:
-                rsp = await http_client.get(seg.data["url"])
-                if rsp.status_code != 200:
-                    await add_associate_data_cmd.reject("图片下载失败，请尝试重新发送。")
-                    continue
-                elif len(rsp.content) > 1024 * 1024 * 10:
-                    await add_associate_data_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-                    continue
-                img_data = await ImageUtils.save_image(
-                    img_base64=base64.b64encode(rsp.content).decode(),
-                    uploader_id=info.user_id,
-                    fid=group_info.fid,
-                    note="",
-                )
-                img_reason = img_data
+            img_data = await ImageUtils.download_and_save_img(
+                url=seg.data["url"], uploader_id=info.user_id, fid=group_info.fid
+            )
+            if img_data == -1:
+                await add_associate_data_cmd.reject("图片下载失败，请尝试重新发送。")
+            elif img_data == -2:
+                await add_associate_data_cmd.reject("图片过大，请尝试取消勾选“原图”。")
+            img_reason = img_data
             if text_buffer:
                 img_reason.note = text_buffer.pop()
                 img_reasons.append(img_reason)
