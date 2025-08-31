@@ -39,7 +39,7 @@ class BaseDocument(Document):
         state_management_replace_objects = True
 
     async def save(self, *args, **kwargs):
-        self.last_update = datetime.now()
+        self.last_update = now_with_tz()
         return await super().save(*args, **kwargs)
 
 
@@ -99,7 +99,7 @@ class BanList(BaseDocument):
     group_id: Annotated[int, Indexed(unique=True)] = Field(...)
     fid: Annotated[int, Indexed(unique=True)] = Field(...)
     ban_list: dict[int, BanReason] = Field(default_factory=dict)
-    last_autoban: datetime = Field(default_factory=datetime.now)
+    last_autoban: datetime = Field(default_factory=now_with_tz)
 
     class Settings(BaseDocument.Settings):
         name = "ban_list"

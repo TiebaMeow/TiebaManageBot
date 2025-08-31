@@ -245,14 +245,14 @@ remove_admin_cmd = on_alconna(
 
 @remove_admin_cmd.handle()
 async def handle_remove_admin(
-    bot: Bot, event: GroupMessageEvent, admin_users: Query[tuple[At, ...]] = AlconnaQuery("admin_users", ())
+    bot: Bot, event: GroupMessageEvent, admin_users: Query[tuple[str, ...]] = AlconnaQuery("admin_users", ())
 ):
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     succeed = []
     failed = []
     try:
-        users = [int(admin_user.target) for admin_user in admin_users.result]
+        users = [int(admin_user) for admin_user in admin_users.result]
     except ValueError:
         await remove_admin_cmd.finish("无效的账号，请检查输入。")
     for admin_user_id in users:
@@ -470,32 +470,6 @@ async def handle_set_BDUSS(  # noqa: N802
         else:
             await GroupCache.update(group_id, slave_STOKEN="")
             await set_BDUSS_cmd.finish("吧务STOKEN删除成功。")
-
-
-set_appeal_deny_reason_alc = Alconna(
-    "set_appeal_deny_reason",
-    Args["reason", str, Field(completion=lambda: "请输入本吧默认的拒绝申诉理由")],
-)
-
-set_appeal_deny_reason_cmd = on_alconna(
-    command=set_appeal_deny_reason_alc,
-    aliases={"拒绝申诉理由"},
-    comp_config={"lite": True},
-    use_cmd_start=True,
-    use_cmd_sep=True,
-    rule=Rule(rule_signed, rule_admin),
-    permission=permission.GROUP,
-    priority=5,
-    block=True,
-)
-
-
-@set_appeal_deny_reason_cmd.handle()
-async def handle_set_appeal_deny_reason(event: GroupMessageEvent, reason: Match[str]):
-    if len(reason.result) < 5:
-        await set_appeal_deny_reason_cmd.finish("拒绝理由至少需要5个字符。")
-    await GroupCache.update(event.group_id, appeal_deny_reason=reason.result)
-    await set_appeal_deny_reason_cmd.finish(f"默认拒绝申诉理由已设置为：{reason.result}")
 
 
 friend_request = on_request(

@@ -191,7 +191,7 @@ async def clear_posts_handle(
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     tieba_uids = [await handle_tieba_uid(tieba_id) for tieba_id in tieba_uid_strs.result]
-    if None in tieba_uids:
+    if 0 in tieba_uids:
         await clear_posts_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     async with Client(group_info.slave_BDUSS, try_ws=True) as client:
         user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
@@ -222,29 +222,32 @@ async def clear_posts_handle(
                     f"共删除 {posts_deleted} 条回复和 {threads_deleted} 个主题贴。"
                 )
         elif mode.result == "方式2":
-            one = await clear_posts_cmd.prompt("方式2暂未实现，扣1催更")
-            if one == UniMessage("1"):
-                await clear_posts_cmd.finish("催更成功！")
-            else:
-                await clear_posts_cmd.finish()
-            confirm = await clear_posts_cmd.prompt(
-                f"即将使用方式2（遍历本吧首页贴子）清理用户 {'，'.join(nicknames)} 在本吧的所有发言。\n"
-                "请注意，该方式相较于方式1更慢，且最多可以遍历吧内前100页贴子，建议仅当用户隐藏其回贴列表时使用。\n"
-                "确认请回复“确认”，取消请回复任意内容。"
-            )
-            if confirm != UniMessage("确认"):
-                await clear_posts_cmd.finish("操作已取消。")
-            await clear_posts_cmd.send("已创建清理任务。")
-            posts_deleted, threads_deleted = await del_posts_from_main_page(client, group_info.fid, user_ids)
-            await Associated.add_data(
-                user_info,
-                group_info,
-                text_data=[TextData(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]清空发言（方式2）")],
-            )
-            await clear_posts_cmd.send(
-                f"用户 {'，'.join(nicknames)} 在本吧的发言清理完成，"
-                f"共删除 {posts_deleted} 条回复和 {threads_deleted} 个主题贴。"
-            )
+            await clear_posts_cmd.finish("方式2暂未实现。")
+            # one = await clear_posts_cmd.prompt("方式2暂未实现，扣1催更")
+            # if one == UniMessage("1"):
+            #     await clear_posts_cmd.finish("催更成功！")
+            # else:
+            #     await clear_posts_cmd.finish()
+            # confirm = await clear_posts_cmd.prompt(
+            #     f"即将使用方式2（遍历本吧首页贴子）清理用户 {'，'.join(nicknames)} 在本吧的所有发言。\n"
+            #     "请注意，该方式相较于方式1更慢，且最多可以遍历吧内前100页贴子，建议仅当用户隐藏其回贴列表时使用。\n"
+            #     "确认请回复“确认”，取消请回复任意内容。"
+            # )
+            # if confirm != UniMessage("确认"):
+            #     await clear_posts_cmd.finish("操作已取消。")
+            # await clear_posts_cmd.send("已创建清理任务。")
+            # posts_deleted, threads_deleted = await del_posts_from_main_page(client, group_info.fid, user_ids)
+            # await Associated.add_data(
+            #     user_info,
+            #     group_info,
+            #     text_data=[
+            #         TextData(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]清空发言（方式2）")
+            #     ],
+            # )
+            # await clear_posts_cmd.send(
+            #     f"用户 {'，'.join(nicknames)} 在本吧的发言清理完成，"
+            #     f"共删除 {posts_deleted} 条回复和 {threads_deleted} 个主题贴。"
+            # )
         else:
             await clear_posts_cmd.finish("参数错误，请检查输入。")
 
@@ -273,7 +276,7 @@ async def add_autoban_handle(
     event: GroupMessageEvent, state: T_State, tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("tieba_uids", ())
 ):
     tieba_uids = await handle_tieba_uids(tieba_uid_strs.result)
-    if None in tieba_uids:
+    if 0 in tieba_uids:
         await add_autoban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
@@ -724,10 +727,10 @@ async def add_ban_reason_input(state: T_State, input_: GroupMessageEvent = Recei
         img_reasons.append(img)
     if len(text_reasons) >= 10:
         text_reasons = text_reasons[:10]
-        await add_autoban_cmd.send("文字数量已达上限，请确认操作。")
+        await add_ban_reason_cmd.send("文字数量已达上限，请确认操作。")
     if len(img_reasons) >= 10:
         img_reasons = img_reasons[:10]
-        await add_autoban_cmd.send("图片数量已达上限，请确认操作。")
+        await add_ban_reason_cmd.send("图片数量已达上限，请确认操作。")
     await add_ban_reason_cmd.reject()
 
 

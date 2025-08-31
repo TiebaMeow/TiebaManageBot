@@ -236,7 +236,7 @@ async def unblacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     uids = await handle_tieba_uids(user_ids.result)
-    if None in uids:
+    if 0 in uids:
         await unblacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
@@ -287,7 +287,7 @@ async def ban_handle(
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     uids = await handle_tieba_uids(user_ids.result)
-    if None in uids:
+    if 0 in uids:
         await ban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
@@ -336,7 +336,7 @@ async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     uids = await handle_tieba_uids(user_ids.result)
-    if None in uids:
+    if 0 in uids:
         await unban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []

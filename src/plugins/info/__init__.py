@@ -635,7 +635,7 @@ async def check_ban_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
         await check_ban_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无封禁记录。")
     user_logs = []
     for info in ban_info.objs[:10]:
-        ban_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M:%S')} - {info.op_type}"
+        ban_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M')} - {info.op_type}"
         if info.op_type == "封禁":
             ban_str += f" - {info.op_duration}天"
         ban_str += f" - 操作人：{info.op_user_name}"
@@ -685,7 +685,7 @@ async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]
         await check_delete_cmd.finish(f"查询完毕，用户 {user_info.nick_name}({tieba_id}) 在本吧无30天内删贴记录。")
     last_info = last_info[:10]
     for info in last_info:
-        delete_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M:%S')} - {info.op_type}"
+        delete_str = f"{info.op_time.strftime('%Y-%m-%d %H:%M')} - {info.op_type}"
         text = info.text or info.title
         if len(text) > 20:
             text = text[:20] + "……"

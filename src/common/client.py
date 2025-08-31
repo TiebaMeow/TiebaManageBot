@@ -34,7 +34,7 @@ class Client(tb.Client):
             return cache[name]
 
         @wraps(attr)
-        async def rate_limited_wrapper(*args, **kwargs) -> Any:
+        async def retry_wrapper(*args, **kwargs) -> Any:
             try:
                 async for attempt in AsyncRetrying(
                     stop=stop_after_attempt(3),
@@ -73,8 +73,8 @@ class Client(tb.Client):
                 log.exception(f"{name}: {e}")
 
         if isinstance(cache, dict):
-            cache[name] = rate_limited_wrapper
-        return rate_limited_wrapper
+            cache[name] = retry_wrapper
+        return retry_wrapper
 
     async def __aenter__(self) -> Client:
         await super().__aenter__()

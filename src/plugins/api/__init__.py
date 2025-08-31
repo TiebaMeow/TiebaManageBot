@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import bcrypt
@@ -11,13 +11,12 @@ from nonebot import get_app, get_bot, get_driver
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
 from nonebot.adapters.onebot.v11.event import Sender
 from nonebot.message import handle_event
-from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from src.db import ApiUser
 
 config = get_driver().config
-SECRET_KEY = config.secret_key
+SECRET_KEY = getattr(config, "secret_key", "default_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

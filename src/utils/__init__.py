@@ -1,13 +1,11 @@
 import re
 import textwrap
 from collections.abc import Awaitable, Callable
-from email.policy import default
 from functools import wraps
 from pathlib import Path
 from typing import Literal
 
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
-from aiotieba.typing import UserInfo
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
 from nonebot_plugin_alconna import AlconnaMatcher
@@ -18,8 +16,7 @@ from src.db import ChromiumCache, GroupCache
 
 async def rule_owner(bot: Bot, event: GroupMessageEvent) -> bool:
     group_member_list: list = await bot.call_api("get_group_member_list", group_id=event.group_id)
-    owner: int = next(item["user_id"] for item in group_member_list if item["role"] == "owner")
-    return event.sender.user_id == owner
+    return any(item["role"] == "owner" and item["user_id"] == event.sender.user_id for item in group_member_list)
 
 
 async def is_master(user_id: int, group_id: int) -> bool:
@@ -79,29 +76,10 @@ async def rule_member(event: FriendRequestEvent) -> bool:
     return False
 
 
-async def check_slave_BDUSS(event: GroupMessageEvent, command: type[AlconnaMatcher]):  # noqa: N802
-    group_info = await GroupCache.get(event.group_id)
-    if not group_info:
-        await command.finish()
-    if not group_info.slave_BDUSS:
-        await command.finish("未设置用于处理的吧务BDUSS。")
-
-
-async def check_master_BDUSS(event: GroupMessageEvent, command: type[AlconnaMatcher]):  # noqa: N802
-    group_info = await GroupCache.get(event.group_id)
-    if not group_info:
-        await command.finish()
-    if not group_info.master_BDUSS:
-        await command.finish("未设置用于处理的吧主BDUSS。")
-
-
 def require_bduss(kind: Literal["slave", "master", "STOKEN"]):
     def decorator(func: Callable[..., Awaitable[object]]) -> Callable[..., Awaitable[object]]:
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            from nonebot.adapters.onebot.v11 import GroupMessageEvent
-            from nonebot_plugin_alconna import AlconnaMatcher
-
             event = kwargs.get("event") or next((a for a in args if isinstance(a, GroupMessageEvent)), None)
             matcher = kwargs.get("matcher") or next((a for a in args if isinstance(a, AlconnaMatcher)), None)
 
@@ -196,7 +174,7 @@ async def text_to_image(text: str, font_size: int = 20) -> bytes:
         <head>
             <style>
                 @font-face {{
-                    font-family: "NotoSans";
+                    font-family: "NotoSansSC";
                     src: url("{font_url}") format("truetype");
                     font-display: block;
                     unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+F900-FAFF, U+2F800-2FA1F;

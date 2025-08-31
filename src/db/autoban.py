@@ -1,10 +1,9 @@
-from datetime import datetime
 from typing import Literal
 
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from aiotieba.typing import UserInfo
 
-from .modules import BanList, BanReason
+from .modules import BanList, BanReason, now_with_tz
 
 __all__ = ["AutoBanList"]
 
@@ -28,7 +27,7 @@ class AutoBanList:
         if not ban_list or user_info.user_id not in ban_list.ban_list:
             return False
         ban_list.ban_list[user_info.user_id].enable = False
-        ban_list.ban_list[user_info.user_id].unban_time = datetime.now().astimezone()
+        ban_list.ban_list[user_info.user_id].unban_time = now_with_tz()
         ban_list.ban_list[user_info.user_id].unban_operator_id = operator
         try:
             await ban_list.save()
@@ -75,7 +74,7 @@ class AutoBanList:
     async def update_autoban(group_id: int, fid: int) -> bool:
         banlist = await BanList.find_one(BanList.group_id == group_id, BanList.fid == fid)
         if banlist:
-            banlist.last_autoban = datetime.now()
+            banlist.last_autoban = now_with_tz()
             await banlist.save()
             return True
         return False

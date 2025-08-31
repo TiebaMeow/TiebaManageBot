@@ -6,8 +6,8 @@ authors = [{ name = "mxcoras", email = "mxcoras@outlook.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aiolimiter>=1.2.1",
     "aiotieba>=4.6.0",
+    "bcrypt>=4.3.0",
     "beanie>=2.0.0",
     "httpx>=0.28.1",
     "nb-cli>=1.4.2",
@@ -15,7 +15,6 @@ dependencies = [
     "nonebot-plugin-alconna>=0.59.4",
     "nonebot-plugin-apscheduler>=0.5.0",
     "nonebot2[fastapi]>=2.4.2",
-    "passlib[bcrypt]>=1.7.4",
     "playwright>=1.53.0",
     "pyjwt>=2.10.1",
     "python-multipart>=0.0.20",

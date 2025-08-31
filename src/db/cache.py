@@ -182,7 +182,7 @@ class AppealCache:
 
     @classmethod
     async def del_appeal_id(cls, appeal_id: int):
-        for message_id, appeal_info in cls._appeal_ids.items():
+        for message_id, appeal_info in list(cls._appeal_ids.items()):
             if appeal_info[0] == appeal_id:
                 del cls._appeal_ids[message_id]
                 break
@@ -209,5 +209,12 @@ class ChromiumCache:
     @classmethod
     async def close(cls):
         # 清理资源
+        if cls.context:
+            await cls.context.close()
+        if cls.browser:
+            await cls.browser.close()
         if cls._p:
             await cls._p.stop()
+        cls._p = None
+        cls.browser = None
+        cls.context = None

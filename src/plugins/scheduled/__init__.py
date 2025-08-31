@@ -1,6 +1,7 @@
 import time
 from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from arclet.alconna import Alconna, Args, Arparma
 from nonebot import get_bot, get_plugin_config, require
@@ -52,7 +53,7 @@ async def autoban():
     for banlist in banlists:
         group_info = await GroupCache.get(banlist.group_id)
         assert group_info is not None  # for pylance
-        if banlist.last_autoban and (datetime.now() - banlist.last_autoban).days < 3:
+        if banlist.last_autoban and (datetime.now(ZoneInfo("Asia/Shanghai")) - banlist.last_autoban).days < 3:
             continue
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
@@ -64,7 +65,9 @@ async def autoban():
                         failed.append(user_id)
         await AutoBanList.update_autoban(group_info.group_id, group_info.fid)
         if failed:
-            log.warning(f"Failed to ban users: {', '.join(map(str, failed))} in {TiebaNameCache.get(group_info.fid)}")
+            log.warning(
+                f"Failed to ban users: {', '.join(map(str, failed))} in {await TiebaNameCache.get(group_info.fid)}"
+            )
     log.info("Autoban task finished.")
 
 

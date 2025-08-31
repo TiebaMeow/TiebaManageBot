@@ -209,6 +209,7 @@ __marimo__/
 
 logs/
 tests/
+scripts/
 autoban_list
 *.ipynb
 *.pdf
