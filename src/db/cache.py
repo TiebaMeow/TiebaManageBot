@@ -210,11 +210,23 @@ class ChromiumCache:
     async def close(cls):
         # 清理资源
         if cls.context:
-            await cls.context.close()
+            try:
+                await cls.context.close()
+            except Exception:
+                pass
+            finally:
+                cls.context = None
         if cls.browser:
-            await cls.browser.close()
+            try:
+                await cls.browser.close()
+            except Exception:
+                pass
+            finally:
+                cls.browser = None
         if cls._p:
-            await cls._p.stop()
-        cls._p = None
-        cls.browser = None
-        cls.context = None
+            try:
+                await cls._p.stop()
+            except Exception:
+                pass
+            finally:
+                cls._p = None
