@@ -20,11 +20,12 @@ SECRET_KEY = getattr(config, "secret_key", "default_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-message_id_pool = range(2**31, 2**32)
-
 
 def message_id_gen():
-    yield from message_id_pool
+    yield from range(2**31, 2**32)
+
+
+message_id_generator = message_id_gen()
 
 
 class Token(BaseModel):
@@ -153,7 +154,7 @@ async def checkout(body: Checkout, current_user: Annotated[User, Depends(get_cur
         sub_type="group",
         user_id=body.user_id,
         message_type="group",
-        message_id=next(message_id_gen()),
+        message_id=next(message_id_generator),
         message=Message([MessageSegment.text(f"/查成分 {body.tieba_uid}")]),
         original_message=Message([MessageSegment.text(f"/查成分 {body.tieba_uid}")]),
         raw_message=f"/查成分 {body.tieba_uid}",
@@ -178,7 +179,7 @@ async def delete(body: Delete, current_user: Annotated[User, Depends(get_current
         sub_type="group",
         user_id=body.user_id,
         message_type="group",
-        message_id=next(message_id_gen()),
+        message_id=next(message_id_generator),
         message=Message([MessageSegment.text(f"/删贴 {body.thread_id}")]),
         original_message=Message([MessageSegment.text(f"/删贴 {body.thread_id}")]),
         raw_message=f"/删贴 {body.thread_id}",
@@ -203,7 +204,7 @@ async def ban(body: Ban, current_user: Annotated[User, Depends(get_current_user)
         sub_type="group",
         user_id=body.user_id,
         message_type="group",
-        message_id=next(message_id_gen()),
+        message_id=next(message_id_generator),
         message=Message([MessageSegment.text(f"/封禁 {body.days} {body.tieba_uid}")]),
         original_message=Message([MessageSegment.text(f"/封禁 {body.days} {body.tieba_uid}")]),
         raw_message=f"/封禁 {body.days} {body.tieba_uid}",
