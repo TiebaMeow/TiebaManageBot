@@ -211,6 +211,12 @@ class ChromiumCache:
         # 清理资源
         if cls.context:
             try:
+                # 先关闭所有页面
+                for page in cls.context.pages:
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
                 await cls.context.close()
             except Exception:
                 pass
