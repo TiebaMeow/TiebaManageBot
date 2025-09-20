@@ -48,7 +48,13 @@ async def autoban():
     for banlist in banlists:
         group_info = await GroupCache.get(banlist.group_id)
         assert group_info is not None  # for pylance
-        if banlist.last_autoban and (datetime.now(ZoneInfo("Asia/Shanghai")) - banlist.last_autoban).days < 3:
+        if (
+            banlist.last_autoban
+            and (
+                datetime.now(ZoneInfo("Asia/Shanghai")) - banlist.last_autoban.astimezone(ZoneInfo("Asia/Shanghai"))
+            ).days
+            < 3
+        ):
             continue
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
