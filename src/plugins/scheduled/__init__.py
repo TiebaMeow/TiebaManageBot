@@ -4,7 +4,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from arclet.alconna import Alconna, Args, Arparma
-from nonebot import get_bot, get_plugin_config
+from nonebot import get_bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
@@ -29,16 +29,11 @@ from src.utils import (
     rule_signed,
 )
 
-from .config import Config
-
 __plugin_meta__ = PluginMetadata(
     name="scheduled",
     description="启动项与计划任务",
     usage="",
-    config=Config,
 )
-
-config = get_plugin_config(Config)
 
 
 @scheduler.scheduled_job("cron", day="*", hour=4, minute=56, second=23)

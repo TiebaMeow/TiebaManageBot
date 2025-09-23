@@ -8,7 +8,7 @@ import httpx
 from aiotieba import ReqUInfo
 from arclet.alconna import Alconna, Args, MultiVar
 from bs4 import BeautifulSoup
-from nonebot import get_driver, get_plugin_config
+from nonebot import get_driver
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -44,7 +44,6 @@ from src.utils import (
     text_to_image,
 )
 
-from .config import Config
 from .producer import Producer
 
 if TYPE_CHECKING:
@@ -57,11 +56,7 @@ __plugin_meta__ = PluginMetadata(
     name="info",
     description="信息查询与导入",
     usage="",
-    config=Config,
 )
-
-config = get_plugin_config(Config)
-
 
 checkout_alc = Alconna(
     "checkout",

@@ -1,5 +1,5 @@
 from arclet.alconna import Alconna, Args, MultiVar
-from nonebot import get_plugin_config, on_request
+from nonebot import on_request
 from nonebot.adapters.onebot.v11 import (
     Bot,
     FriendRequestEvent,
@@ -24,17 +24,11 @@ from src.utils import (
     rule_signed,
 )
 
-from .config import Config
-
 __plugin_meta__ = PluginMetadata(
     name="sign",
     description="注册相关",
     usage="",
-    config=Config,
 )
-
-config = get_plugin_config(Config)
-
 
 sign_alc = Alconna(
     "sign",

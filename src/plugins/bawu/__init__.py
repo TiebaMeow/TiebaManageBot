@@ -2,7 +2,6 @@ from typing import Literal
 
 from aiotieba import PostSortType
 from arclet.alconna import Alconna, Args, Arparma, MultiVar
-from nonebot import get_plugin_config
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
@@ -23,16 +22,11 @@ from src.utils import (
     rule_signed,
 )
 
-from .config import Config
-
 __plugin_meta__ = PluginMetadata(
     name="bawu",
     description="常规吧务管理项",
     usage="",
-    config=Config,
 )
-
-config = get_plugin_config(Config)
 
 del_thread_alc = Alconna(
     "del_thread",

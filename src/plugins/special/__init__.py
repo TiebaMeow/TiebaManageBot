@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from arclet.alconna import Alconna, Args, MultiVar
-from nonebot import get_plugin_config
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment, permission
 from nonebot.params import Received
@@ -34,8 +33,6 @@ from src.utils import (
     rule_signed,
 )
 
-from .config import Config
-
 if TYPE_CHECKING:
     from aiotieba.typing import UserInfo
 
@@ -43,13 +40,7 @@ __plugin_meta__ = PluginMetadata(
     name="special",
     description="",
     usage="",
-    config=Config,
 )
-
-current_path = Path(__file__).parent
-
-config = get_plugin_config(Config)
-
 
 clear_posts_alc = Alconna(
     "clear_posts",
