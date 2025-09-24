@@ -239,12 +239,17 @@ def _base_styles(font_size: int) -> str:
                 margin: 0;
                 padding: 16px;
                 background: var(--bg);
-                font-family: 'NotoSansSC', -apple-system, BlinkMacSystemFont,
-                             'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+                font-family: "NotoSansSC", "Noto Sans CJK SC";
                 color: var(--text);
                 font-size: {font_size}px;
                 line-height: {font_size + 6}px;
                 -webkit-font-smoothing: antialiased;
+                font-variant-east-asian: normal;
+                font-feature-settings: "locl" 1;
+                text-rendering: optimizeLegibility;
+                -webkit-font-feature-settings: "locl" 1;
+                -moz-font-feature-settings: "locl" 1;
+                lang: zh-CN;
             }}
             .card {{
                 width: 100%;
