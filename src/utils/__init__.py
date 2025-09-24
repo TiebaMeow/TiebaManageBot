@@ -1,7 +1,7 @@
 import re
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from nonebot.adapters import Bot
@@ -189,7 +189,7 @@ def handle_thread_urls(thread_urls: tuple[str, ...]) -> list[int]:
 
 
 def handle_post_url(post_url: str) -> tuple[int, int]:
-    match = re.search(r"tieba.baidu.com/p/(\d+)\?.+post_id=(\d+)", post_url)
+    match = re.search(r"tieba.baidu.com/p/(\d+)\?.*post_id=(\d+)", post_url)
     if match:
         return int(match.group(1)), int(match.group(2))
     else:

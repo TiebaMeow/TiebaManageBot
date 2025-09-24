@@ -708,6 +708,8 @@ async def tieba_url_message_handle(event: GroupMessageEvent):
         async with Client(try_ws=True) as client:
             thread_info = await client.get_posts(tid)
             post_info = await client.get_comments(tid, pid)
+            if thread_info.err or post_info.err:
+                return
             img_bytes = await render_post_card(
                 thread_info.thread,
                 post_info.post,
@@ -720,6 +722,8 @@ async def tieba_url_message_handle(event: GroupMessageEvent):
         return
     async with Client(try_ws=True) as client:
         thread_info = await client.get_posts(tid, with_comments=True)
+        if thread_info.err:
+            return
         thread = thread_info.thread
         posts = thread_info.objs
 
