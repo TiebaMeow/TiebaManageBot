@@ -1,13 +1,12 @@
 import asyncio
 
 from beanie import Document
-from playwright.async_api import async_playwright
 
 from src.common import Client
 
 from .modules import GroupInfo
 
-__all__ = ["GroupCache", "TiebaNameCache", "ChromiumCache"]
+__all__ = ["GroupCache", "TiebaNameCache"]
 
 
 class GroupCache:
@@ -186,53 +185,3 @@ class AppealCache:
             if appeal_info[0] == appeal_id:
                 del cls._appeal_ids[message_id]
                 break
-
-
-class ChromiumCache:
-    # 将浏览器实例放入类属性中
-    _p = None
-    browser = None
-    context = None
-
-    @classmethod
-    async def initialize(cls):
-        if cls._p is None:
-            cls._p = await async_playwright().start()
-            cls.browser = await cls._p.chromium.launch(
-                headless=True,
-                args=[
-                    "--allow-file-access-from-files"  # 允许加载本地文件
-                ],
-            )
-            cls.context = await cls.browser.new_context()
-
-    @classmethod
-    async def close(cls):
-        # 清理资源
-        if cls.context:
-            try:
-                # 先关闭所有页面
-                for page in cls.context.pages:
-                    try:
-                        await page.close()
-                    except Exception:
-                        pass
-                await cls.context.close()
-            except Exception:
-                pass
-            finally:
-                cls.context = None
-        if cls.browser:
-            try:
-                await cls.browser.close()
-            except Exception:
-                pass
-            finally:
-                cls.browser = None
-        if cls._p:
-            try:
-                await cls._p.stop()
-            except Exception:
-                pass
-            finally:
-                cls._p = None

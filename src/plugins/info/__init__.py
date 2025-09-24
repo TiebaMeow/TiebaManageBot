@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING
 
 import httpx
 from aiotieba import ReqUInfo
+from aiotieba.enums import PostSortType
 from arclet.alconna import Alconna, Args, MultiVar
 from bs4 import BeautifulSoup
-from nonebot import get_driver
+from nonebot import get_driver, get_plugin_config, on_message
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -35,8 +36,11 @@ from logger import log
 from src.common import Client
 from src.db import Associated, GroupCache, ImageUtils, TextData, TiebaNameCache
 from src.utils import (
+    handle_post_url,
     handle_thread_url,
     handle_tieba_uid,
+    render_post_card,
+    render_thread_card,
     require_slave_BDUSS,
     require_STOKEN,
     rule_moderator,
@@ -44,6 +48,7 @@ from src.utils import (
     text_to_image,
 )
 
+from .config import Config
 from .producer import Producer
 
 if TYPE_CHECKING:
@@ -56,7 +61,10 @@ __plugin_meta__ = PluginMetadata(
     name="info",
     description="信息查询与导入",
     usage="",
+    config=Config,
 )
+
+plugin_config = get_plugin_config(Config)
 
 checkout_alc = Alconna(
     "checkout",
@@ -676,3 +684,60 @@ async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]
         delete_str += f" - 操作人：{info.op_user_name}"
         user_logs.append(delete_str)
     await check_delete_cmd.send("\n".join(user_logs))
+
+
+async def has_tieba_url(event: GroupMessageEvent) -> bool:
+    raw_message = event.raw_message
+    if "tieba.baidu.com/p/" in raw_message and event.user_id not in plugin_config.ignore_users:
+        return True
+    return False
+
+
+tieba_url_message = on_message(
+    rule=Rule(has_tieba_url),
+    permission=permission.GROUP,
+    priority=14,
+    block=False,
+)
+
+
+@tieba_url_message.handle()
+async def tieba_url_message_handle(event: GroupMessageEvent):
+    tid, pid = handle_post_url(event.raw_message)
+    if tid and pid:
+        async with Client(try_ws=True) as client:
+            thread_info = await client.get_posts(tid)
+            post_info = await client.get_comments(tid, pid)
+            img_bytes = await render_post_card(
+                thread_info.thread,
+                post_info.post,
+                post_info.objs[:3],
+            )
+        await tieba_url_message.finish(MessageSegment.image(img_bytes))
+    # 仅主题贴
+    tid = handle_thread_url(event.raw_message)
+    if not tid:
+        return
+    async with Client(try_ws=True) as client:
+        thread_info = await client.get_posts(tid, with_comments=True)
+        thread = thread_info.thread
+        posts = thread_info.objs
+
+        # 处理包含1楼的情况
+        if len(posts) > 0 and posts[0].floor == 1:
+            del posts[0]
+            if thread.reply_num > 0:
+                thread.reply_num -= 1
+        img_bytes = await render_thread_card(thread, posts[:3])
+    await tieba_url_message.finish(MessageSegment.image(img_bytes))
+
+
+# any_message = on_message(
+#     priority=2,
+#     block=True,
+# )
+
+
+# @any_message.handle()
+# async def any_message_handle(bot: Bot, event: GroupMessageEvent):
+#     pass

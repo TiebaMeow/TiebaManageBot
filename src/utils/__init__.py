@@ -1,9 +1,7 @@
 import re
-import textwrap
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from nonebot.adapters import Bot
@@ -11,7 +9,9 @@ from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
 from nonebot_plugin_alconna import AlconnaMatcher
 
 from src.common import Client
-from src.db import ChromiumCache, GroupCache
+from src.db import GroupCache
+
+from .renderer import render_post_card, render_thread_card, text_to_image
 
 
 async def rule_owner(bot: Bot, event: GroupMessageEvent) -> bool:
@@ -141,89 +141,6 @@ async def get_user_name(bot: Bot, group_id: int, user_id: int) -> str | None:
         return None
     else:
         return username
-
-
-async def text_to_image(text: str, font_size: int = 20) -> bytes:
-    if ChromiumCache.context is None:
-        await ChromiumCache.initialize()
-    context = ChromiumCache.context
-    assert context is not None
-
-    wrapped_text = ""
-    for line in text.split("\n"):
-        wrapped_line = textwrap.fill(line, width=48)
-        wrapped_text += wrapped_line + "\n"
-
-    lines = wrapped_text.split("\n")[:-1]
-
-    if not lines:
-        return b""
-
-    def add_indent(line):
-        return "  " + line if (not line.startswith("  - ") and not line.endswith("吧：")) else line
-
-    lines = list(map(add_indent, lines))
-    line_str = "\n".join(lines)
-
-    # 构建字体文件的绝对路径
-    font_path = Path(__file__).parent.parent.parent / "static" / "font" / "NotoSansSC-Regular.ttf"
-    font_url = font_path.as_uri()
-
-    html_content = f"""
-    <html>
-        <head>
-            <style>
-                @font-face {{
-                    font-family: "NotoSansSC";
-                    src: url("{font_url}") format("truetype");
-                    font-display: block;
-                    unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+F900-FAFF, U+2F800-2FA1F;
-                }}
-                body {{
-                    font-family: "NotoSansSC", "Noto Sans CJK SC";
-                    font-size: {font_size}px;
-                    line-height: {font_size + 2}px;
-                    margin: 0;
-                    padding: 0;
-                    font-variant-east-asian: normal;
-                    font-feature-settings: "locl" 1;
-                    text-rendering: optimizeLegibility;
-                    -webkit-font-feature-settings: "locl" 1;
-                    -moz-font-feature-settings: "locl" 1;
-                    lang: zh-CN;
-                }}
-                pre {{
-                    margin-left: 10px;
-                    margin-top: 10px;
-                    display: inline-block;
-                    white-space: pre;
-                    font-family: inherit;
-                }}
-            </style>
-        </head>
-        <body>
-            <pre>{line_str}</pre>
-        </body>
-    </html>
-    """  # noqa: E501
-
-    page = await context.new_page()
-    await page.set_content(html_content)
-
-    pre_width = await page.evaluate("""() => {
-        const pre = document.querySelector('pre');
-        return pre.offsetWidth + 20; // 包含边距
-    }""")
-    pre_height = await page.evaluate("""() => {
-        const pre = document.querySelector('pre');
-        return pre.offsetHeight + 20;
-    }""")
-
-    await page.set_viewport_size({"width": pre_width, "height": pre_height})
-    screenshot = await page.screenshot(type="jpeg", quality=75, path=None)
-    await page.close()
-
-    return screenshot
 
 
 async def get_tieba_user_info(tieba_uid: int, client: Client) -> UserInfo_TUid:

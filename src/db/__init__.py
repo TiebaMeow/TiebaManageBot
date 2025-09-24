@@ -5,7 +5,7 @@ from logger import log
 
 from .associated import Associated
 from .autoban import AutoBanList
-from .cache import AppealCache, ChromiumCache, GroupCache, TiebaNameCache
+from .cache import AppealCache, GroupCache, TiebaNameCache
 from .image_utils import ImageUtils
 from .modules import (
     ApiUser,
@@ -39,24 +39,3 @@ async def init_db():
     else:
         await GroupCache.load_data()
         log.info("Database connection established successfully.")
-
-
-async def init_chromium():
-    try:
-        await ChromiumCache.initialize()
-        assert ChromiumCache.browser is not None
-    except Exception as e:
-        log.error(f"Failed to initialize Chromium: {e}")
-        raise e
-    else:
-        log.info("Chromium initialized successfully.")
-
-
-async def close_chromium():
-    try:
-        await ChromiumCache.close()
-    except Exception as e:
-        log.error(f"Failed to close Chromium: {e}")
-        raise e
-    else:
-        log.info("Chromium closed successfully.")
