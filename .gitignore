@@ -209,8 +209,9 @@ __marimo__/
 
 logs/
 tests/
-scripts/
+data/
 autoban_list
 *.ipynb
 *.pdf
 .env.prod
+copilot-instructions.md
