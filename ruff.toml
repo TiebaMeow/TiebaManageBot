@@ -32,6 +32,7 @@ ignore = ["PIE804", "B008"]
 
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"scripts/**.py" = ["E402"]
 
 [format]
 quote-style = "double"

@@ -83,7 +83,7 @@ async def init_sqlite_db(db_path: Path | None = None, *, echo: bool = False) -> 
 
     SQLITE_ENGINE = engine
     SQLITE_SESSION_FACTORY = async_sessionmaker(engine, expire_on_commit=False)
-    log.info("SQLite database initialised at %s", target_path)
+    log.info(f"SQLite database initialised at {target_path.as_posix()}")
     return engine
 
 

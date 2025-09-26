@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -15,12 +15,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy.dialects.sqlite import BLOB, JSON
 from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+from sqlalchemy.types import TypeDecorator
 
 __all__ = [
     "Base",
@@ -28,16 +27,43 @@ __all__ = [
     "TextDataModel",
     "ImgDataModel",
     "AssociatedDataContentModel",
-    "serialize_text_data",
-    "deserialize_text_data",
-    "serialize_img_data",
-    "deserialize_img_data",
     "GroupInfo",
-    "ImageDocument",
-    "BanList",
-    "BanReason",
+    "Images",
+    "BanStatus",
+    "BanInfo",
     "AssociatedData",
 ]
+
+
+class PydanticList[T: BaseModel](TypeDecorator):
+    """JSON column that stores a list of Pydantic models."""
+
+    impl = JSON
+    cache_ok = True
+
+    def __init__(self, model_type: type[T] = BaseModel, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._model_type = model_type
+
+    def process_bind_param(self, value: list[T] | None, dialect) -> list[dict[str, Any]]:
+        if value is None:
+            return []
+        return [item.model_dump(mode="json") for item in value]
+
+    def process_result_value(self, value: list[dict[str, Any]] | None, dialect) -> list[T]:
+        if value is None:
+            return []
+        model_type = self._model_type
+        return [model_type(**item) for item in value]
+
+    @property
+    def python_type(self) -> type[list[T]]:
+        return list[T]
+
+
+def pydantic_list_column(model_type: type[BaseModel]):
+    return MutableList.as_mutable(PydanticList(model_type))
+
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
@@ -71,6 +97,11 @@ class TextDataModel(BaseModel):
     upload_time: datetime
     text: str
 
+    @field_validator("upload_time", mode="before")
+    @classmethod
+    def _ensure_upload_time(cls, value: datetime | str | None) -> datetime:
+        return _ensure_datetime(value)
+
 
 class ImgDataModel(BaseModel):
     """Lightweight representation of an image record stored in JSON columns."""
@@ -80,6 +111,11 @@ class ImgDataModel(BaseModel):
     upload_time: datetime
     image_id: int
     note: str = ""
+
+    @field_validator("upload_time", mode="before")
+    @classmethod
+    def _ensure_upload_time(cls, value: datetime | str | None) -> datetime:
+        return _ensure_datetime(value)
 
 
 class AssociatedDataContentModel(BaseModel):
@@ -102,20 +138,18 @@ class GroupInfo(TimestampMixin, Base):
     master_bduss: Mapped[str] = mapped_column("master_bduss", Text, default="", nullable=False)
     slave_bduss: Mapped[str] = mapped_column("slave_bduss", Text, default="", nullable=False)
     slave_stoken: Mapped[str] = mapped_column("slave_stoken", Text, default="", nullable=False)
-    is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    appeal_sub: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    appeal_autodeny: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    group_args: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
-class ImageDocument(TimestampMixin, Base):
+class Images(TimestampMixin, Base):
     __tablename__ = "image_documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    img: Mapped[str] = mapped_column(Text, nullable=False)
+    img: Mapped[bytes] = mapped_column(BLOB, nullable=False)
 
 
-class BanList(TimestampMixin, Base):
-    __tablename__ = "ban_lists"
+class BanStatus(TimestampMixin, Base):
+    __tablename__ = "ban_status"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -126,14 +160,14 @@ class BanList(TimestampMixin, Base):
         nullable=False,
     )
 
-    __table_args__ = (UniqueConstraint("group_id", "fid", name="uq_ban_lists_group_fid"),)
+    __table_args__ = (UniqueConstraint("group_id", "fid", name="uq_ban_status_group_fid"),)
 
 
-class BanReason(TimestampMixin, Base):
-    __tablename__ = "ban_reasons"
+class BanInfo(TimestampMixin, Base):
+    __tablename__ = "ban_info"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ban_list_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    ban_status_id: Mapped[int] = mapped_column(Integer, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     ban_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -144,10 +178,10 @@ class BanReason(TimestampMixin, Base):
     enable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     unban_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     unban_operator_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    text_reason: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
-    img_reason: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    text_reason: Mapped[list[TextDataModel]] = mapped_column(PydanticList(TextDataModel), default=list, nullable=False)
+    img_reason: Mapped[list[ImgDataModel]] = mapped_column(PydanticList(ImgDataModel), default=list, nullable=False)
 
-    __table_args__ = (UniqueConstraint("ban_list_id", "user_id", name="uq_ban_reasons_list_user"),)
+    __table_args__ = (UniqueConstraint("ban_status_id", "user_id", name="uq_ban_reasons_list_user"),)
 
 
 class AssociatedData(TimestampMixin, Base):
@@ -162,8 +196,8 @@ class AssociatedData(TimestampMixin, Base):
     nicknames: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     creater_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    text_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
-    img_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    text_data: Mapped[list[TextDataModel]] = mapped_column(PydanticList(TextDataModel), default=list, nullable=False)
+    img_data: Mapped[list[ImgDataModel]] = mapped_column(PydanticList(ImgDataModel), default=list, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "fid", name="uq_associated_data_user_fid"),
@@ -186,74 +220,3 @@ def _ensure_datetime(value: datetime | str | None) -> datetime:
         dt = datetime.fromtimestamp(0, tz=SHANGHAI_TZ)
 
     return dt.astimezone(SHANGHAI_TZ)
-
-
-def _serialize_datetime(value: datetime) -> str:
-    return value.astimezone(SHANGHAI_TZ).isoformat()
-
-
-def serialize_text_data(entries: Iterable[TextDataModel]) -> list[dict[str, Any]]:
-    return [
-        {
-            "uploader_id": entry.uploader_id,
-            "fid": entry.fid,
-            "upload_time": _serialize_datetime(entry.upload_time),
-            "text": entry.text,
-        }
-        for entry in entries
-    ]
-
-
-def deserialize_text_data(payloads: Sequence[dict[str, Any] | TextDataModel]) -> list[TextDataModel]:
-    result: list[TextDataModel] = []
-    for payload in payloads:
-        if isinstance(payload, TextDataModel):
-            result.append(payload)
-            continue
-        upload_time = _ensure_datetime(payload.get("upload_time"))
-        result.append(
-            TextDataModel(
-                uploader_id=int(payload.get("uploader_id", 0)),
-                fid=int(payload.get("fid", 0)),
-                upload_time=upload_time,
-                text=str(payload.get("text", "")),
-            )
-        )
-    return result
-
-
-def serialize_img_data(entries: Iterable[ImgDataModel]) -> list[dict[str, Any]]:
-    return [
-        {
-            "uploader_id": entry.uploader_id,
-            "fid": entry.fid,
-            "upload_time": _serialize_datetime(entry.upload_time),
-            "image_id": int(entry.image_id),
-            "note": entry.note,
-        }
-        for entry in entries
-    ]
-
-
-def deserialize_img_data(payloads: Sequence[dict[str, Any] | ImgDataModel]) -> list[ImgDataModel]:
-    result: list[ImgDataModel] = []
-    for payload in payloads:
-        if isinstance(payload, ImgDataModel):
-            result.append(payload)
-            continue
-        upload_time = _ensure_datetime(payload.get("upload_time"))
-        image_id_raw = payload.get("image_id", 0)
-        try:
-            image_id = int(image_id_raw)
-        except (TypeError, ValueError):
-            image_id = 0
-        result.append(
-            ImgDataModel(
-                uploader_id=int(payload.get("uploader_id", 0)),
-                fid=int(payload.get("fid", 0)),
-                upload_time=upload_time,
-                image_id=image_id,
-                note=str(payload.get("note", "")),
-            )
-        )
-    return result
