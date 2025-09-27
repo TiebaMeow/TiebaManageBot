@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -26,13 +26,32 @@ __all__ = [
     "now_with_tz",
     "TextDataModel",
     "ImgDataModel",
-    "AssociatedDataContentModel",
     "GroupInfo",
     "Images",
     "BanStatus",
-    "BanInfo",
+    "BanList",
     "AssociatedData",
 ]
+
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def now_with_tz() -> datetime:
+    return datetime.now(SHANGHAI_TZ)
+
+
+class Base(AsyncAttrs, DeclarativeBase):
+    """Declarative base class for all SQLAlchemy models."""
+
+
+class TimestampMixin:
+    last_update: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now_with_tz,
+        onupdate=now_with_tz,
+        nullable=False,
+    )
 
 
 class PydanticList[T: BaseModel](TypeDecorator):
@@ -65,33 +84,7 @@ def pydantic_list_column(model_type: type[BaseModel]):
     return MutableList.as_mutable(PydanticList(model_type))
 
 
-SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
-
-
-def now_with_tz() -> datetime:
-    """Return the current time in the Shanghai timezone."""
-
-    return datetime.now(SHANGHAI_TZ)
-
-
-class Base(AsyncAttrs, DeclarativeBase):
-    """Declarative base class for all SQLAlchemy models."""
-
-
-class TimestampMixin:
-    """Mixin providing an auto-updated ``last_update`` timestamp column."""
-
-    last_update: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=now_with_tz,
-        onupdate=now_with_tz,
-        nullable=False,
-    )
-
-
 class TextDataModel(BaseModel):
-    """Lightweight representation of a text record stored in JSON columns."""
-
     uploader_id: int
     fid: int
     upload_time: datetime
@@ -118,21 +111,13 @@ class ImgDataModel(BaseModel):
         return _ensure_datetime(value)
 
 
-class AssociatedDataContentModel(BaseModel):
-    """Container used for storing associated text and image data in JSON."""
-
-    tieba_uid: int | None = None
-    text_data: list[TextDataModel] = Field(default_factory=list)
-    img_data: list[ImgDataModel] = Field(default_factory=list)
-
-
 class GroupInfo(TimestampMixin, Base):
     __tablename__ = "group_info"
 
     group_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     master: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    admins: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
-    moderators: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    admins: Mapped[list[int]] = mapped_column(MutableList.as_mutable(JSON), default=list, nullable=False)
+    moderators: Mapped[list[int]] = mapped_column(MutableList.as_mutable(JSON), default=list, nullable=False)
     fid: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     fname: Mapped[str] = mapped_column(String(255), default="", nullable=False)
     master_bduss: Mapped[str] = mapped_column("master_bduss", Text, default="", nullable=False)
@@ -142,7 +127,7 @@ class GroupInfo(TimestampMixin, Base):
 
 
 class Images(TimestampMixin, Base):
-    __tablename__ = "image_documents"
+    __tablename__ = "images"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     img: Mapped[bytes] = mapped_column(BLOB, nullable=False)
@@ -151,37 +136,33 @@ class Images(TimestampMixin, Base):
 class BanStatus(TimestampMixin, Base):
     __tablename__ = "ban_status"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    fid: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    last_autoban: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=now_with_tz,
-        nullable=False,
-    )
-
-    __table_args__ = (UniqueConstraint("group_id", "fid", name="uq_ban_status_group_fid"),)
+    fid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    last_autoban: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_with_tz, nullable=False)
 
 
-class BanInfo(TimestampMixin, Base):
-    __tablename__ = "ban_info"
+class BanList(TimestampMixin, Base):
+    __tablename__ = "ban_list"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ban_status_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    fid: Mapped[int] = mapped_column(Integer, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    ban_time: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=now_with_tz,
-        nullable=False,
-    )
+    ban_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_with_tz, nullable=False)
     operator_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     enable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     unban_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     unban_operator_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    text_reason: Mapped[list[TextDataModel]] = mapped_column(PydanticList(TextDataModel), default=list, nullable=False)
-    img_reason: Mapped[list[ImgDataModel]] = mapped_column(PydanticList(ImgDataModel), default=list, nullable=False)
+    text_reason: Mapped[list[TextDataModel]] = mapped_column(
+        pydantic_list_column(TextDataModel),
+        default=list,
+        nullable=False,
+    )
+    img_reason: Mapped[list[ImgDataModel]] = mapped_column(
+        pydantic_list_column(ImgDataModel),
+        default=list,
+        nullable=False,
+    )
 
-    __table_args__ = (UniqueConstraint("ban_status_id", "user_id", name="uq_ban_reasons_list_user"),)
+    __table_args__ = (UniqueConstraint("fid", "user_id", name="uq_ban_list_fid_user"),)
 
 
 class AssociatedData(TimestampMixin, Base):
@@ -196,8 +177,16 @@ class AssociatedData(TimestampMixin, Base):
     nicknames: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     creater_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    text_data: Mapped[list[TextDataModel]] = mapped_column(PydanticList(TextDataModel), default=list, nullable=False)
-    img_data: Mapped[list[ImgDataModel]] = mapped_column(PydanticList(ImgDataModel), default=list, nullable=False)
+    text_data: Mapped[list[TextDataModel]] = mapped_column(
+        pydantic_list_column(TextDataModel),
+        default=list,
+        nullable=False,
+    )
+    img_data: Mapped[list[ImgDataModel]] = mapped_column(
+        pydantic_list_column(ImgDataModel),
+        default=list,
+        nullable=False,
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "fid", name="uq_associated_data_user_fid"),

@@ -23,7 +23,7 @@ from src.db.models import (
     AssociatedData as SQLAssociatedData,
 )
 from src.db.models import (
-    BanInfo as SQLBanInfo,
+    BanList as SQLBanList,
 )
 from src.db.models import (
     BanStatus as SQLBanStatus,
@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 async def _reset_sqlite_tables(session: AsyncSession) -> None:
     """Remove existing rows so the migration can run on a clean slate."""
 
-    await session.execute(delete(SQLBanInfo))
+    await session.execute(delete(SQLBanList))
     await session.execute(delete(SQLBanStatus))
     await session.execute(delete(SQLAssociatedData))
     await session.execute(delete(SQLGroupInfo))
@@ -83,8 +83,7 @@ async def _migrate_image_documents(session: AsyncSession) -> dict[str, int]:
 
 
 def _coerce_model_list[ModelT: BaseModel](
-    model_type: type[ModelT],
-    entries: Iterable[ModelT | Mapping[str, Any]],
+    model_type: type[ModelT], entries: Iterable[ModelT | Mapping[str, Any]]
 ) -> list[ModelT]:
     result: list[ModelT] = []
     for entry in entries:
@@ -139,9 +138,10 @@ async def _migrate_group_info(session: AsyncSession) -> None:
             slave_bduss=group.slave_BDUSS,
             slave_stoken=group.slave_STOKEN,
             group_args={
-                "is_public": group.is_public,
                 "appeal_sub": group.appeal_sub,
                 "appeal_autodeny": group.appeal_autodeny,
+                "autoban": True,
+                "is_public": group.is_public,
             },
             last_update=group.last_update,
         )
@@ -153,7 +153,6 @@ async def _migrate_ban_lists(session: AsyncSession, image_map: dict[str, int]) -
     mongo_banlists: list[BanList] = await BanList.find_all().to_list()
     for banlist in mongo_banlists:
         sql_banstatus = SQLBanStatus(
-            group_id=banlist.group_id,
             fid=banlist.fid,
             last_autoban=banlist.last_autoban,
             last_update=banlist.last_update,
@@ -164,8 +163,8 @@ async def _migrate_ban_lists(session: AsyncSession, image_map: dict[str, int]) -
         for user_id, reason in banlist.ban_list.items():
             text_payloads = _convert_text_payloads(reason.text_reason)
             img_payloads = _convert_img_payloads(reason.img_reason, image_map)
-            sql_reason = SQLBanInfo(
-                ban_status_id=sql_banstatus.id,
+            sql_reason = SQLBanList(
+                fid=sql_banstatus.fid,
                 user_id=user_id,
                 ban_time=reason.ban_time,
                 operator_id=reason.operator_id,
