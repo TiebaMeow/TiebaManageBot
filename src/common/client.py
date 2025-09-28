@@ -92,11 +92,11 @@ class Client(tb.Client):
         await super().__aexit__(exc_type, exc_val, exc_tb)
 
 
-@cache(ttl=60, key="get_user_threads_cached:{user_id}:{pn}")
+@cache(ttl=180, key="get_user_threads_cached:{user_id}:{pn}")
 async def get_user_threads_cached(client: Client, user_id: int, pn: int) -> UserThreads:
     return await client.get_user_threads(user_id, pn=pn)
 
 
-@cache(ttl=60, key="get_user_posts_cached:{user_id}:{pn}:{rn}")
+@cache(ttl=180, key="get_user_posts_cached:{user_id}:{pn}:{rn}")
 async def get_user_posts_cached(client: Client, user_id: int, pn: int, rn: int) -> UserPostss:
     return await client.get_user_posts(user_id, pn=pn, rn=rn)
