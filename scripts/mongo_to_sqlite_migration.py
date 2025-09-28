@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from sqlalchemy import delete
 
-from src.db import DBInterface
+from src.db.interface import DBInterface
 from src.db.models import (
     AssociatedData as SQLAssociatedData,
 )

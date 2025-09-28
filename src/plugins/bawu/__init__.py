@@ -9,7 +9,7 @@ from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
 from logger import log
 from src.common import Client
-from src.db import Associated, GroupCache, TextData
+from src.db import Associated, GroupCache, TextDataModel
 from src.utils import (
     handle_thread_url,
     handle_thread_urls,
@@ -63,7 +63,7 @@ async def del_thread_handle(
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
     succeeded = []
     failed = []
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         for tid in tids:
             posts = await client.get_posts(tid)
             user_info = await client.get_user_info(posts.thread.author_id)
@@ -73,7 +73,7 @@ async def del_thread_handle(
                     user_info,
                     group_info,
                     text_data=[
-                        TextData(
+                        TextDataModel(
                             uploader_id=event.user_id,
                             fid=group_info.fid,
                             text=f"[自动添加]删贴\n标题：{posts.thread.title}\n{posts.thread.text}",
@@ -121,7 +121,7 @@ async def del_post_handle(
     succeeded = []
     failed = []
     floor_list = []
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         thread_info = await client.get_posts(tid, pn=1, rn=10, sort=PostSortType.DESC)
         if not thread_info.objs:
             await del_post_cmd.finish("获取贴子信息失败，请检查输入。")
@@ -146,7 +146,7 @@ async def del_post_handle(
                         user_info,
                         group_info,
                         text_data=[
-                            TextData(
+                            TextDataModel(
                                 uploader_id=event.user_id,
                                 fid=group_info.fid,
                                 text=f"[自动添加]删回复\n原贴：{post.tid}\n内容：{post.text}",
@@ -186,7 +186,7 @@ async def blacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, 
         await blacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_bduss, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.add_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -194,7 +194,7 @@ async def blacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, 
                 await Associated.add_data(
                     user_info,
                     group_info,
-                    text_data=[TextData(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]拉黑")],
+                    text_data=[TextDataModel(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]拉黑")],
                 )
             else:
                 failed.append(tieba_uid)
@@ -231,7 +231,7 @@ async def unblacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str
         await unblacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_bduss, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.del_bawu_blacklist(group_info.fid, user_info.user_id):
@@ -239,7 +239,7 @@ async def unblacklist_handle(event: GroupMessageEvent, user_ids: Query[tuple[str
                 await Associated.add_data(
                     user_info,
                     group_info,
-                    text_data=[TextData(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]取消拉黑")],
+                    text_data=[TextDataModel(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]取消拉黑")],
                 )
             else:
                 failed.append(tieba_uid)
@@ -282,7 +282,7 @@ async def ban_handle(
         await ban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.block(group_info.fid, user_info.user_id, day=days_int):
@@ -291,7 +291,7 @@ async def ban_handle(
                     user_info,
                     group_info,
                     text_data=[
-                        TextData(
+                        TextDataModel(
                             uploader_id=event.user_id, fid=group_info.fid, text=f"[自动添加]封禁\n封禁天数：{days}"
                         )
                     ],
@@ -331,7 +331,7 @@ async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]
         await unban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
     succeeded = []
     failed = []
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         for tieba_uid in uids:
             user_info = await client.tieba_uid2user_info(tieba_uid)
             if await client.unblock(group_info.fid, user_info.user_id):
@@ -339,7 +339,7 @@ async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]
                 await Associated.add_data(
                     user_info,
                     group_info,
-                    text_data=[TextData(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]解除封禁")],
+                    text_data=[TextDataModel(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]解除封禁")],
                 )
             else:
                 failed.append(tieba_uid)
@@ -375,7 +375,7 @@ async def good_handle(event: GroupMessageEvent, thread_url: Match[str], args: Ar
     tid = handle_thread_url(thread_url.result)
     if tid is None:
         await good_cmd.finish("无法解析链接，请检查输入。")
-    async with Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_bduss, try_ws=True) as client:
         match cmd:
             case "加精":
                 if await client.good(group_info.fid, tid):
@@ -460,7 +460,7 @@ async def move_handle(
     tid = handle_thread_url(thread_url.result)
     if tid is None:
         await move_cmd.finish("无法解析链接，请检查输入。")
-    async with Client(group_info.master_BDUSS, try_ws=True) as client:
+    async with Client(group_info.master_bduss, try_ws=True) as client:
         tab_info = await client.get_tab_map(group_info.fname)
         tab_map = tab_info.map
         for name in tab_name.result:

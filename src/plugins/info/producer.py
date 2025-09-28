@@ -1,8 +1,13 @@
-import asyncio
+from __future__ import annotations
 
-from src.common import Client
+import asyncio
+from typing import TYPE_CHECKING
+
 from src.db import TiebaNameCache
 from src.utils import text_to_image
+
+if TYPE_CHECKING:
+    from src.common import Client
 
 
 class AlwaysEqual:
@@ -12,8 +17,8 @@ class AlwaysEqual:
 
 class Producer:
     def __init__(self, client: Client, user_id: int, fids: list[int] | None):
-        self.queue = asyncio.Queue(maxsize=100)
-        self.buffer = []
+        self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=100)
+        self.buffer: list[dict[str, str]] = []
         self.user_id = user_id
         self.fids = fids or [AlwaysEqual()]
         self.client = client
@@ -24,7 +29,7 @@ class Producer:
         self.cond = asyncio.Condition()
         self.producer_task = asyncio.create_task(self._producer())
 
-    async def _fetch_batch(self):
+    async def _fetch_batch(self) -> bool:
         """获取单个批次的数据"""
         tasks = [
             self.client.get_user_posts(self.user_id, pn=page, rn=50)
@@ -46,7 +51,7 @@ class Producer:
             ])
         return has_empty
 
-    async def _generate_msg(self, posts: list[dict[str, str]]):
+    async def _generate_msg(self, posts: list[dict[str, str]]) -> bytes:
         """生成消息"""
         posts_str = "\n".join([f"{post['tieba_name']}：\n{post['post_content']}" for post in posts])
         return await text_to_image(posts_str)
@@ -73,7 +78,7 @@ class Producer:
                 await self.queue.put(None)
                 return
 
-    async def get(self):
+    async def get(self) -> bytes | None:
         """获取数据"""
         try:
             data = await self.queue.get()

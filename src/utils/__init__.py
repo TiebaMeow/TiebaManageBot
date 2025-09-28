@@ -93,13 +93,13 @@ def require_bduss(kind: Literal["slave", "master", "STOKEN"]):
             assert group_info is not None  # for pylance
             if kind == "slave":
                 kind_str = "吧务BDUSS"
-                required = group_info.slave_BDUSS
+                required = group_info.slave_bduss
             elif kind == "master":
                 kind_str = "吧主BDUSS"
-                required = group_info.master_BDUSS
+                required = group_info.master_bduss
             elif kind == "STOKEN":
                 kind_str = "吧务STOKEN"
-                required = group_info.slave_STOKEN
+                required = group_info.slave_stoken
 
             if not required:
                 await matcher.finish(f"未设置用于处理的{kind_str}。")

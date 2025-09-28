@@ -34,7 +34,7 @@ from nonebot_plugin_alconna import (
 
 from logger import log
 from src.common import Client
-from src.db import Associated, GroupCache, ImageUtils, TextData, TiebaNameCache
+from src.db import Associated, GroupCache, ImageUtils, TextDataModel, TiebaNameCache
 from src.utils import (
     handle_post_url,
     handle_thread_url,
@@ -93,7 +93,7 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     await checkout_cmd.send("正在查询...")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
         nick_name_old_info = await client.get_user_info(user_info.user_id, require=ReqUInfo.BASIC)
         nick_name_old = nick_name_old_info.nick_name_old
@@ -408,7 +408,7 @@ async def add_associate_data_receive(state: T_State, info: GroupMessageEvent = R
             else:
                 img_buffer.append(img_reason)
     for text in text_buffer:
-        text_reasons.append(TextData(uploader_id=info.user_id, fid=group_info.fid, text=text))
+        text_reasons.append(TextDataModel(uploader_id=info.user_id, fid=group_info.fid, text=text))
     for img in img_buffer:
         img_reasons.append(img)
     if len(text_reasons) >= 10:
@@ -449,22 +449,22 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
     state["group_info"] = group_info
-    associated_data = await Associated.get_data(tieba_id, group_info.fid)
+    associated_data = await Associated.get_data(user_info.user_id, group_info.fid)
     state["associated_data"] = associated_data
     if not associated_data:
         await get_associate_data_cmd.finish("未查询到该用户的关联信息。")
-    text_datas = list(enumerate(associated_data.data.text_data, 1))
+    text_datas = list(enumerate(associated_data.text_data, 1))
     state["text_datas"] = text_datas
     text_datas_list = [
         f"{index}. [{text_data.upload_time.strftime('%Y-%m-%d %H:%M:%S')}] {text_data.text}"
         for index, text_data in text_datas
     ]
     img_enum_start = len(text_datas_list) + 1
-    img_datas = list(enumerate(associated_data.data.img_data, img_enum_start))
+    img_datas = list(enumerate(associated_data.img_data, img_enum_start))
     state["img_datas"] = img_datas
     img_datas_list = []
     for index, img in img_datas:
-        img_data = await ImageUtils.get_image_data(img)
+        img_data = await ImageUtils.get_image_data(img.image_id)
         if not img_data:
             img_datas_list.append(
                 MessageSegment.text(
@@ -474,7 +474,7 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
             continue
         img_datas_list.append(
             f"{index}. [{img.upload_time.strftime('%Y-%m-%d %H:%M:%S')}]"
-            + MessageSegment.image(f"base64://{img_data}")
+            + MessageSegment.image(img_data)
             + f"注释：{img.note}"
         )
     # img_datas_list = [
@@ -503,7 +503,6 @@ async def get_associate_data_delete(state: T_State, delete: GroupMessageEvent = 
         await get_associate_data_cmd.reject("参数错误，请检查输入。")
     group_info = state["group_info"]
     user_info = state["user_info"]
-    associated_data = state["associated_data"]
     text_datas = state["text_datas"]
     img_datas = state["img_datas"]
     if any(_id < 0 or _id > len(text_datas) + len(img_datas) for _id in ids):
@@ -523,9 +522,7 @@ async def get_associate_data_delete(state: T_State, delete: GroupMessageEvent = 
             continue
     text_datas = [text_data for _, text_data in text_datas]
     img_datas = [img_data for _, img_data in img_datas]
-    associated_data.data.text_data = text_datas
-    associated_data.data.img_data = img_datas
-    result = await Associated.set_data(user_info.tieba_uid, group_info.fid, associated_data.data)
+    result = await Associated.set_data(user_info.user_id, group_info.fid, text_datas, img_datas)
     if result:
         await get_associate_data_cmd.finish("删除成功。")
     else:
@@ -615,7 +612,7 @@ async def check_ban_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     await check_ban_cmd.send("正在查询...")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(group_info.slave_BDUSS, group_info.slave_STOKEN, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, group_info.slave_stoken, try_ws=True) as client:
         user_info_tuid = await client.tieba_uid2user_info(tieba_id)
         user_info = await client.get_user_info(user_info_tuid.user_id, require=ReqUInfo.BASIC)
         search_value = user_info.user_name or user_info.nick_name_old
@@ -661,7 +658,7 @@ async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]
     await check_delete_cmd.send("正在查询...")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(group_info.slave_BDUSS, group_info.slave_STOKEN, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, group_info.slave_stoken, try_ws=True) as client:
         user_info_tuid = await client.tieba_uid2user_info(tieba_id)
         user_info = await client.get_user_info(user_info_tuid.user_id, require=ReqUInfo.BASIC)
         search_value = user_info.user_name or user_info.nick_name_old

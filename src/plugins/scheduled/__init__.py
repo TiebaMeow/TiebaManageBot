@@ -18,7 +18,7 @@ from src.db import (
     Associated,
     AutoBanList,
     GroupCache,
-    TextData,
+    TextDataModel,
     TiebaNameCache,
 )
 from src.utils import (
@@ -39,27 +39,18 @@ __plugin_meta__ = PluginMetadata(
 @scheduler.scheduled_job("cron", day="*", hour=4, minute=56, second=23)
 async def autoban():
     log.info("Autoban task started.")
-    banlists = await AutoBanList.get_ban_lists()
-    for banlist in banlists:
-        group_info = await GroupCache.get(banlist.group_id)
+    forums = await AutoBanList.get_autoban()
+    for forum in forums:
+        group_info = await GroupCache.get(forum.group_id)
         assert group_info is not None  # for pylance
-        if (
-            banlist.last_autoban
-            and (
-                datetime.now(ZoneInfo("Asia/Shanghai")) - banlist.last_autoban.astimezone(ZoneInfo("Asia/Shanghai"))
-            ).days
-            < 3
-        ):
-            continue
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
-        async with Client(group_info.slave_BDUSS, try_ws=True) as client:
-            for user_id, ban_reason in banlist.ban_list.items():
-                if ban_reason.enable:
-                    result = await client.block(group_info.fid, user_id, day=10, reason="违规")
-                    if not result:
-                        failed.append(user_id)
-        await AutoBanList.update_autoban(group_info.group_id, group_info.fid)
+        async with Client(group_info.slave_bduss, try_ws=True) as client:
+            async for user_id in AutoBanList.get_autoban_lists(forum.fid):
+                result = await client.block(group_info.fid, user_id, day=10, reason="违规")
+                if not result:
+                    failed.append(user_id)
+        await AutoBanList.update_autoban(group_info.fid, group_info.group_id)
         if failed:
             log.warning(
                 f"Failed to ban users: {', '.join(map(str, failed))} in {await TiebaNameCache.get(group_info.fid)}"
@@ -71,22 +62,22 @@ async def autoban():
 async def appeal_push():
     group_infos = await GroupCache.all()
     for group_info in group_infos:
-        if not group_info.slave_BDUSS or not group_info.appeal_sub:
+        if not group_info.slave_bduss or not group_info.group_args.get("appeal_sub", False):
             continue
-        async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+        async with Client(group_info.slave_bduss, try_ws=True) as client:
             appeals = await client.get_unblock_appeals(group_info.fid, rn=20)
             cached_appeals = await AppealCache.get_appeals(group_info.group_id)
             for appeal in appeals.objs:
                 user_info = await client.get_user_info(appeal.user_id)
-                banlist = await AutoBanList.get_ban_list(group_info.group_id, group_info.fid)
-                if banlist and user_info.user_id in banlist.ban_list:
+                banlist, _ = await AutoBanList.ban_status(group_info.fid, user_info.user_id)
+                if banlist == "banned":
                     await client.handle_unblock_appeals(
                         group_info.fid,
                         appeal_ids=[appeal.appeal_id],
                         refuse=True,
                     )
                     continue
-                if group_info.appeal_autodeny:
+                if group_info.group_args.get("appeal_autodeny", False):
                     if time.time() - appeal.appeal_time > 72000:
                         result = await client.handle_unblock_appeals(
                             group_info.fid,
@@ -99,7 +90,7 @@ async def appeal_push():
                                 user_info,
                                 group_info,
                                 text_data=[
-                                    TextData(uploader_id=0, fid=group_info.fid, text="[自动添加]超时自动拒绝申诉")
+                                    TextDataModel(uploader_id=0, fid=group_info.fid, text="[自动添加]超时自动拒绝申诉")
                                 ],
                             )
                             await bot.call_api(
@@ -167,28 +158,33 @@ async def appeal_switch_handle(event: GroupMessageEvent, args: Arparma):
     except Exception:
         cmd = "状态"
     switch = args.query("switch")
+    group_info = await GroupCache.get(event.group_id)
+    assert group_info is not None  # for pylance
+    group_args = group_info.group_args
     if switch == "开启":
         if cmd == "申诉推送":
-            await GroupCache.update(event.group_id, appeal_sub=True)
+            group_args.update({"appeal_sub": True})
+            await GroupCache.update(event.group_id, group_args=group_args)
         elif cmd == "自动拒绝申诉":
-            await GroupCache.update(event.group_id, appeal_autodeny=True)
+            group_args.update({"appeal_autodeny": True})
+            await GroupCache.update(event.group_id, group_args=group_args)
         await appeal_switch_cmd.finish(f"已开启{cmd}。")
     elif switch == "关闭":
         if cmd == "申诉推送":
-            await GroupCache.update(event.group_id, appeal_sub=False)
+            group_args.update({"appeal_sub": False})
+            await GroupCache.update(event.group_id, group_args=group_args)
         elif cmd == "自动拒绝申诉":
-            await GroupCache.update(event.group_id, appeal_autodeny=False)
+            group_args.update({"appeal_autodeny": False})
+            await GroupCache.update(event.group_id, group_args=group_args)
         await appeal_switch_cmd.finish(f"已关闭{cmd}。")
     else:
-        group_info = await GroupCache.get(event.group_id)
-        assert group_info is not None  # for pylance
         if cmd == "申诉推送":
-            if group_info.appeal_sub:
+            if group_info.group_args.get("appeal_sub", False):
                 await appeal_switch_cmd.finish("当前已开启申诉推送。")
             else:
                 await appeal_switch_cmd.finish("当前已关闭申诉推送。")
         elif cmd == "自动拒绝申诉":
-            if group_info.appeal_autodeny:
+            if group_info.group_args.get("appeal_autodeny", False):
                 await appeal_switch_cmd.finish("当前已开启自动拒绝申诉。")
             else:
                 await appeal_switch_cmd.finish("当前已关闭自动拒绝申诉。")
@@ -226,7 +222,7 @@ async def deal_appeal_handle(event: GroupMessageEvent, reason: Match[str], args:
         await deal_appeal_cmd.finish("未找到对应的申诉。")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(group_info.slave_BDUSS, try_ws=True) as client:
+    async with Client(group_info.slave_bduss, try_ws=True) as client:
         user_info = await client.get_user_info(user_id)
         if cmd in ["拒绝申诉", "驳回申诉", "拒绝", "驳回"]:
             result = await client.handle_unblock_appeals(group_info.fid, appeal_ids=[appeal_id], refuse=True)
@@ -235,7 +231,7 @@ async def deal_appeal_handle(event: GroupMessageEvent, reason: Match[str], args:
                     user_info,
                     group_info,
                     text_data=[
-                        TextData(
+                        TextDataModel(
                             uploader_id=event.user_id,
                             fid=group_info.fid,
                             text=f"[自动添加]拒绝申诉，理由：{reason_str}",
@@ -253,7 +249,7 @@ async def deal_appeal_handle(event: GroupMessageEvent, reason: Match[str], args:
                     user_info,
                     group_info,
                     text_data=[
-                        TextData(
+                        TextDataModel(
                             uploader_id=event.user_id,
                             fid=group_info.fid,
                             text=f"[自动添加]通过申诉，理由：{reason_str}",
