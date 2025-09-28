@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -27,7 +27,7 @@ __all__ = [
     "TextDataModel",
     "ImgDataModel",
     "GroupInfo",
-    "Images",
+    "Image",
     "BanStatus",
     "BanList",
     "AssociatedData",
@@ -87,7 +87,7 @@ def pydantic_list_column(model_type: type[BaseModel]):
 class TextDataModel(BaseModel):
     uploader_id: int
     fid: int
-    upload_time: datetime
+    upload_time: datetime = Field(default_factory=now_with_tz)
     text: str
 
     @field_validator("upload_time", mode="before")
@@ -101,7 +101,7 @@ class ImgDataModel(BaseModel):
 
     uploader_id: int
     fid: int
-    upload_time: datetime
+    upload_time: datetime = Field(default_factory=now_with_tz)
     image_id: int
     note: str = ""
 
@@ -126,7 +126,7 @@ class GroupInfo(TimestampMixin, Base):
     group_args: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
-class Images(TimestampMixin, Base):
+class Image(TimestampMixin, Base):
     __tablename__ = "images"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -137,6 +137,7 @@ class BanStatus(TimestampMixin, Base):
     __tablename__ = "ban_status"
 
     fid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     last_autoban: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_with_tz, nullable=False)
 
 
@@ -173,8 +174,8 @@ class AssociatedData(TimestampMixin, Base):
     fid: Mapped[int] = mapped_column(BigInteger, nullable=False)
     tieba_uid: Mapped[int] = mapped_column(BigInteger, nullable=False)
     portrait: Mapped[str] = mapped_column(String(255), nullable=False)
-    user_name: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    nicknames: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    user_name: Mapped[list[str]] = mapped_column(MutableList.as_mutable(JSON), default=list, nullable=False)
+    nicknames: Mapped[list[str]] = mapped_column(MutableList.as_mutable(JSON), default=list, nullable=False)
     creater_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     text_data: Mapped[list[TextDataModel]] = mapped_column(

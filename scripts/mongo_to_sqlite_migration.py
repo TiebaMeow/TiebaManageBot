@@ -15,30 +15,20 @@ import base64
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from beanie import init_beanie
 from pydantic import BaseModel
+from pymongo import AsyncMongoClient
 from sqlalchemy import delete
 
-from src.db import close_sqlite_db, get_sqlite_session, init_db, init_sqlite_db
+from src.db import DBInterface
 from src.db.models import (
     AssociatedData as SQLAssociatedData,
 )
-from src.db.models import (
-    BanList as SQLBanList,
-)
-from src.db.models import (
-    BanStatus as SQLBanStatus,
-)
-from src.db.models import (
-    Base,
-    ImgDataModel,
-    TextDataModel,
-)
-from src.db.models import (
-    GroupInfo as SQLGroupInfo,
-)
-from src.db.models import (
-    Images as SQLImages,
-)
+from src.db.models import BanList as SQLBanList
+from src.db.models import BanStatus as SQLBanStatus
+from src.db.models import GroupInfo as SQLGroupInfo
+from src.db.models import Image as SQLImages
+from src.db.models import ImgDataModel, TextDataModel
 from src.db.modules import (
     AssociatedData,
     AssociatedDataContent,
@@ -53,6 +43,23 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def init_mongo():
+    try:
+        client = AsyncMongoClient(host="mongodb://localhost:27017")
+        await init_beanie(
+            database=client.tiebabot,
+            document_models=[
+                GroupInfo,
+                AssociatedData,
+                BanList,
+                ImageDocument,
+            ],
+        )
+    except Exception as e:
+        print(f"Failed to connect to the database: {e}")
+        raise e
 
 
 async def _reset_sqlite_tables(session: AsyncSession) -> None:
@@ -154,6 +161,7 @@ async def _migrate_ban_lists(session: AsyncSession, image_map: dict[str, int]) -
     for banlist in mongo_banlists:
         sql_banstatus = SQLBanStatus(
             fid=banlist.fid,
+            group_id=banlist.group_id,
             last_autoban=banlist.last_autoban,
             last_update=banlist.last_update,
         )
@@ -206,23 +214,23 @@ async def _migrate_associated_data(session: AsyncSession, image_map: dict[str, i
 
 
 async def migrate() -> None:
-    await init_db()
-    engine = await init_sqlite_db()
+    await init_mongo()
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = (data_dir / "tiebabot.db").resolve()
+    print(f"Using SQLite database at: {db_path.as_posix()}")
+    await DBInterface.start(f"sqlite+aiosqlite:///{db_path.as_posix()}")
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    async for session in get_sqlite_session():
+    async with DBInterface.get_session() as session:
         async with session.begin():
             await _reset_sqlite_tables(session)
             image_map = await _migrate_image_documents(session)
             await _migrate_group_info(session)
             await _migrate_ban_lists(session, image_map)
             await _migrate_associated_data(session, image_map)
-        break
 
-    await close_sqlite_db()
+    await DBInterface.stop()
     print("Mongo → SQLite migration completed successfully.")
 
 
