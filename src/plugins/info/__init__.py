@@ -33,7 +33,7 @@ from nonebot_plugin_alconna import (
 )
 
 from logger import log
-from src.common import Client
+from src.common import Client, get_user_posts_cached, get_user_threads_cached
 from src.db import Associated, GroupCache, ImageUtils, TextDataModel, TiebaNameCache
 from src.utils import (
     handle_post_url,
@@ -127,7 +127,7 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
 
         user_posts_count = {}
 
-        tasks = [client.get_user_threads(user_info.user_id, page) for page in range(1, 51)]
+        tasks = [get_user_threads_cached(client, user_info.user_id, page) for page in range(1, 51)]
         results_t: Sequence[UserThreads] = await asyncio.gather(*tasks, return_exceptions=False)
         for result in results_t:
             if result and result.objs:
@@ -137,7 +137,7 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
                     else:
                         user_posts_count[thread.fid] = 1
 
-        tasks = [client.get_user_posts(user_info.user_id, page, rn=50) for page in range(1, 51)]
+        tasks = [get_user_posts_cached(client, user_info.user_id, page, rn=50) for page in range(1, 51)]
         results_p: Sequence[UserPostss] = await asyncio.gather(*tasks, return_exceptions=False)
         for result in results_p:
             if result and result.objs:
@@ -175,7 +175,7 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
 
 async def get_all_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, client: Client):
     user_info = await client.tieba_uid2user_info(tieba_id)
-    user_posts = await client.get_user_posts(user_info.user_id, pn=1, rn=50)
+    user_posts = await get_user_posts_cached(client, user_info.user_id, pn=1, rn=50)
     if not user_posts.objs:
         await check_posts_cmd.finish("未能查询到该用户发言，可能该用户已隐藏发言。")
     user_posts = [
@@ -188,7 +188,7 @@ async def get_all_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, client: 
     user_posts_str = "\n".join([f"{post['tieba_name']}：\n{post['post_content']}" for post in user_posts])
     page = 2
     while True:
-        next_posts = await client.get_user_posts(user_info.user_id, pn=page, rn=50)
+        next_posts = await get_user_posts_cached(client, user_info.user_id, pn=page, rn=50)
         if not next_posts.objs:
             img = await text_to_image(user_posts_str)
             user_posts_img = MessageSegment.image(img)
@@ -230,7 +230,7 @@ async def get_specific_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, fid
                 break
             display_pn += 1
             continue
-        user_posts = await client.get_user_posts(user_info.user_id, pn=pn, rn=50)
+        user_posts = await get_user_posts_cached(client, user_info.user_id, pn=pn, rn=50)
         if not user_posts.objs:
             if next_specific_posts:
                 slice_posts_str = "\n".join([
