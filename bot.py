@@ -16,5 +16,10 @@ async def startup():
 
 nonebot.load_from_toml("pyproject.toml")
 
+config = driver.config
+review_enabled = getattr(config, "enable_addons", False)
+if review_enabled:
+    nonebot.load_plugins("src/addons")
+
 if __name__ == "__main__":
     nonebot.run()
