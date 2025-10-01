@@ -12,22 +12,13 @@ _基于 [Nonebot2](https://github.com/nonebot/nonebot2) 与 [aiotieba](https://g
 
 更多使用方法，欢迎查阅[使用手册](./docs/使用手册.md)。
 
+更多高级功能，欢迎查阅[高级功能](./docs/高级功能.md)。
+
 注意：基于能用就行的思想，你可能会看到非常丑陋的代码实现。
 
 ## 环境配置
 
-1. 安装并启动 Mongodb
-
-    - [Windows 平台安装 MongoDB](https://www.runoob.com/mongodb/mongodb-window-install.html)
-    - [Linux 平台安装 MongoDB](https://www.runoob.com/mongodb/mongodb-linux-install.html)
-
-    你也可以使用 Docker 安装 MongoDB，记得修改 `/your/local/path` 为你本地的路径：
-
-    ```shell
-    docker run -d -p 27017:27017 --name mongodb -v /your/local/path:/data/db mongo
-    ```
-
-2. 安装依赖
+1. 安装依赖
 
     `uv` 的安装方式详见[官方文档](https://docs.astral.sh/uv/getting-started/installation/)或[中文文档](https://hellowac.github.io/uv-zh-cn/getting-started/installation/)。
 
@@ -35,13 +26,21 @@ _基于 [Nonebot2](https://github.com/nonebot/nonebot2) 与 [aiotieba](https://g
     uv sync
     ```
 
-3. 安装 `playwright` 所需无头 `Chromium`
+2. 安装 `playwright` 所需无头 `Chromium`
 
     ```shell
     uv run playwright install chromium-headless-shell
     ```
 
-4. 安装并配置 NapCat
+3. （可选）安装并配置 `TiebaScraper`
+
+    `TiebaScraper` 用于支持 `TiebaManageBot` 的高级功能，如内容审查、数据分析等。
+
+    具体部署方法参照 [TiebaScraper](https://github.com/TiebaMeow/TiebaScraper)。
+
+4. 根据注释修改项目根目录下 `.env` 文件中的配置项。
+
+5. 安装并配置 NapCat
 
     具体部署方法参照 [NapCat](https://napneko.github.io/) 官方步骤。Windows 用户推荐使用 [NapCat.Win.一键版本](https://napneko.github.io/guide/boot/Shell#napcat-win-%E4%B8%80%E9%94%AE%E7%89%88%E6%9C%AC)。
 
