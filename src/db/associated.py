@@ -23,12 +23,13 @@ class Associated:
         img_data: list[ImgDataModel] | None = None,
     ) -> bool:
         async with DBInterface.get_session() as session:
-            associated_data = await session.execute(
-                select(AssociatedData).where(
-                    AssociatedData.user_id == user_info.user_id, AssociatedData.fid == group_info.fid
-                )
+            stmt = select(AssociatedData).where(
+                AssociatedData.user_id == user_info.user_id,
+                AssociatedData.fid == group_info.fid,
             )
-            associated_data = associated_data.scalar_one_or_none()
+            result = await session.execute(stmt)
+            associated_data = result.scalar_one_or_none()
+
             if not associated_data:
                 associated_data = AssociatedData(
                     user_id=user_info.user_id,
@@ -38,14 +39,19 @@ class Associated:
                     creater_id=group_info.master,
                 )
                 session.add(associated_data)
-            if user_info.user_name not in associated_data.user_name:
-                associated_data.user_name.append(user_info.user_name)
-            if user_info.nick_name not in associated_data.nicknames:
-                associated_data.nicknames.append(user_info.nick_name)
+
+            if user_info.user_name and user_info.user_name not in associated_data.user_name:
+                associated_data.user_name = [*associated_data.user_name, user_info.user_name]
+
+            if user_info.nick_name and user_info.nick_name not in associated_data.nicknames:
+                associated_data.nicknames = [*associated_data.nicknames, user_info.nick_name]
+
             if text_data:
-                associated_data.text_data.extend(text_data)
+                associated_data.text_data = [*associated_data.text_data, *text_data]
+
             if img_data:
-                associated_data.img_data.extend(img_data)
+                associated_data.img_data = [*associated_data.img_data, *img_data]
+
             try:
                 await session.commit()
                 return True
