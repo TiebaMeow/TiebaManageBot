@@ -165,6 +165,13 @@ class BanList(TimestampMixin, Base):
 
     __table_args__ = (UniqueConstraint("fid", "user_id", name="uq_ban_list_fid_user"),)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.text_reason is None:
+            self.text_reason = []
+        if self.img_reason is None:
+            self.img_reason = []
+
 
 class AssociatedData(TimestampMixin, Base):
     __tablename__ = "associated_data"
@@ -193,6 +200,17 @@ class AssociatedData(TimestampMixin, Base):
         UniqueConstraint("user_id", "fid", name="uq_associated_data_user_fid"),
         Index("ix_associated_data_tieba_uid_fid", "tieba_uid", "fid"),
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.text_data is None:
+            self.text_data = []
+        if self.img_data is None:
+            self.img_data = []
+        if self.user_name is None:
+            self.user_name = []
+        if self.nicknames is None:
+            self.nicknames = []
 
 
 def _ensure_datetime(value: datetime | str | None) -> datetime:

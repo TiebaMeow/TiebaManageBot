@@ -40,12 +40,6 @@ class Associated:
                 )
                 session.add(associated_data)
 
-            if associated_data.user_name is None:
-                associated_data.user_name = []
-
-            if associated_data.nicknames is None:
-                associated_data.nicknames = []
-
             if user_info.user_name and user_info.user_name not in associated_data.user_name:
                 associated_data.user_name = [*associated_data.user_name, user_info.user_name]
 
