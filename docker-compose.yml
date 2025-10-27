@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  bot:
+    image: tiebameow/tiebamanagebot:latest
+    container_name: tiebamanagebot_app
+    env_file:
+      - .env
+    volumes:
+      - ./bot_data:/app/data
+      - ./bot_logs:/app/logs
+    ports:
+      - "18765:18765"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped

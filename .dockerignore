@@ -1,0 +1,31 @@
+# VCS
+.git
+.gitmodules
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env/
+.venv/
+
+# Local configs and secrets
+*.env
+.env.*
+!.env.docker.example
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Project data and logs (mounted as volumes at runtime)
+data/
+logs/
+
+# Tests and docs are not required in runtime image
+/tests/
+/docs/
+/scripts/

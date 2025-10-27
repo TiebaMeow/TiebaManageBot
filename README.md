@@ -59,3 +59,12 @@ uv run nb run
 ```
 
 等待输出中出现 `[INFO] nonebot | OneBot V11 | Bot 123456789 connected` 即为成功连接到 QQ 客户端。
+
+## Docker 部署
+
+1. 根据实际环境修改 `.env` 文件中 Redis / PostgreSQL / NapCat 相关配置，保持与 docker-compose 环境一致。
+2. 启动服务： `docker compose up -d`。
+3. 查看运行日志：`docker compose logs -f bot`。
+4. 停止服务：`docker compose down`。
+
+推荐与 [TiebaScraper](https://github.com/TiebaMeow/TiebaScraper) 和其他微服务编排到同一 `docker-compose` 环境中运行。
