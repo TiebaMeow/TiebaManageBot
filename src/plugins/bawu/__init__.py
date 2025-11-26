@@ -292,13 +292,13 @@ async def ban_handle(
                     group_info,
                     text_data=[
                         TextDataModel(
-                            uploader_id=event.user_id, fid=group_info.fid, text=f"[自动添加]封禁\n封禁天数：{days}"
+                            uploader_id=event.user_id, fid=group_info.fid, text=f"[自动添加]封禁\n封禁天数：{days_int}"
                         )
                     ],
                 )
             else:
                 failed.append(tieba_uid)
-    succeeded_str = f"\n成功为{len(succeeded)}名用户添加{days}天封禁。" if succeeded else ""
+    succeeded_str = f"\n成功为{len(succeeded)}名用户添加{days_int}天封禁。" if succeeded else ""
     failed_str = f"\n以下用户封禁失败：{', '.join('tieba_uid=' + str(uid) for uid in failed)}" if failed else ""
     await ban_cmd.finish(f"封禁操作完成。{succeeded_str}{failed_str}")
 
