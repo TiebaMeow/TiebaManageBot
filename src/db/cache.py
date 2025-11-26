@@ -1,6 +1,7 @@
 import asyncio
-import time
+from pathlib import Path
 
+from cashews import Cache
 from sqlalchemy import select
 from sqlalchemy import update as _update
 
@@ -10,6 +11,15 @@ from .interface import DBInterface
 from .models import GroupInfo
 
 __all__ = ["GroupCache", "TiebaNameCache", "AppealCache"]
+
+CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+tiebaname_cache = Cache()
+tiebaname_cache.setup(f"disk://?directory={CACHE_DIR.resolve().as_posix()}/tieba_name_cache&shards=0")
+appeal_cache = Cache()
+appeal_cache.setup(f"disk://?directory={CACHE_DIR.resolve().as_posix()}/appeal_cache&shards=0")
 
 
 class GroupCache:
@@ -78,62 +88,63 @@ class GroupCache:
 
 
 class TiebaNameCache:
-    _cache: dict[int, str] = {}
-    _err_record: dict[int, float] = {}
-    _lock = asyncio.Lock()
-
     @classmethod
     async def get(cls, fid: int) -> str:
-        async with cls._lock:
-            if name := cls._cache.get(fid):
-                return name
+        key = f"fid:{fid}"
+        if name := await tiebaname_cache.get(key):
+            return name
 
-            if (last_err := cls._err_record.get(fid)) and time.time() - last_err < 5:
-                return ""
+        err_key = f"err:{fid}"
+        if await tiebaname_cache.exists(err_key):
+            return ""
 
-            name = await cls._fetch(fid)
-            if name:
-                cls._cache[fid] = name
-            else:
-                cls._err_record[fid] = time.time()
+        name = await cls._fetch(fid)
+        if name:
+            await tiebaname_cache.set(key, name)
+        else:
+            await tiebaname_cache.set(err_key, 1, expire=5)
         return name
 
-    @classmethod
-    async def _fetch(cls, fid: int) -> str:
+    @staticmethod
+    async def _fetch(fid: int) -> str:
         async with Client() as client:
             return await client.get_fname(fid)
 
 
 class AppealCache:
-    _appeal_lists: dict[int, list[tuple[int, int]]] = {}
-    _appeal_ids: dict[int, tuple[int, int]] = {}
-
-    @classmethod
-    async def get_appeals(cls, group_id: int) -> list[tuple[int, int]]:
-        appeals = cls._appeal_lists.get(group_id)
+    @staticmethod
+    async def get_appeals(group_id: int) -> list[tuple[int, int]]:
+        key = f"group:{group_id}"
+        appeals = await appeal_cache.get(key)
         if appeals is None:
             appeals = []
-            cls._appeal_lists[group_id] = appeals
+            await appeal_cache.set(key, appeals, expire="2d")
         return appeals
 
-    @classmethod
-    async def set_appeals(cls, group_id: int, appeals: list[tuple[int, int]]):
-        cls._appeal_lists[group_id] = appeals
+    @staticmethod
+    async def set_appeals(group_id: int, appeals: list[tuple[int, int]]):
+        key = f"group:{group_id}"
+        await appeal_cache.set(key, appeals, expire="2d")
 
-    @classmethod
-    async def get_appeal_id(cls, message_id: int) -> tuple[int, int]:
-        appeal_info = cls._appeal_ids.get(message_id)
+    @staticmethod
+    async def get_appeal_id(message_id: int) -> tuple[int, int]:
+        key = f"msg:{message_id}"
+        appeal_info = await appeal_cache.get(key)
         if not appeal_info:
             return 0, 0
         return appeal_info
 
-    @classmethod
-    async def set_appeal_id(cls, message_id: int, appeal_info: tuple[int, int]):
-        cls._appeal_ids[message_id] = appeal_info
+    @staticmethod
+    async def set_appeal_id(message_id: int, appeal_info: tuple[int, int]):
+        key = f"msg:{message_id}"
+        await appeal_cache.set(key, appeal_info, expire="2d")
+        rev_key = f"rev:{appeal_info[0]}"
+        await appeal_cache.set(rev_key, message_id, expire="2d")
 
-    @classmethod
-    async def del_appeal_id(cls, appeal_id: int):
-        for message_id, appeal_info in list(cls._appeal_ids.items()):
-            if appeal_info[0] == appeal_id:
-                del cls._appeal_ids[message_id]
-                break
+    @staticmethod
+    async def del_appeal_id(appeal_id: int):
+        rev_key = f"rev:{appeal_id}"
+        message_id = await appeal_cache.get(rev_key)
+        if message_id:
+            await appeal_cache.delete(f"msg:{message_id}")
+            await appeal_cache.delete(rev_key)
