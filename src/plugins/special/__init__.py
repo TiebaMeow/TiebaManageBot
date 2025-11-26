@@ -368,7 +368,7 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
             if not await client.block(group_info.fid, current_user.user_id, day=10, reason="违规"):
                 log.warning(
                     f"Failed to block user {current_user.nick_name}({current_user.tieba_uid}) in "
-                    f"{TiebaNameCache.get(group_info.fid)}"
+                    f"{await TiebaNameCache.get(group_info.fid)}"
                 )
                 # await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 封禁操作失败。")
         user_infos.remove(current_user)

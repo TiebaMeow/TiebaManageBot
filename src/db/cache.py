@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from sqlalchemy import select
 from sqlalchemy import update as _update
@@ -78,15 +79,23 @@ class GroupCache:
 
 class TiebaNameCache:
     _cache: dict[int, str] = {}
+    _err_record: dict[int, float] = {}
     _lock = asyncio.Lock()
 
     @classmethod
     async def get(cls, fid: int) -> str:
         async with cls._lock:
-            name = cls._cache.get(fid)
-            if name is None:
-                name = await cls._fetch(fid)
+            if name := cls._cache.get(fid):
+                return name
+
+            if (last_err := cls._err_record.get(fid)) and time.time() - last_err < 5:
+                return ""
+
+            name = await cls._fetch(fid)
+            if name:
                 cls._cache[fid] = name
+            else:
+                cls._err_record[fid] = time.time()
         return name
 
     @classmethod
