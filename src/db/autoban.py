@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert
 
 from .interface import DBInterface
 from .models import SHANGHAI_TZ, BanList, BanStatus, ImgDataModel, TextDataModel, now_with_tz
@@ -23,7 +24,33 @@ class AutoBanList:
                 ban_status = BanStatus(fid=fid, group_id=group_id)
                 session.add(ban_status)
                 await session.flush()
-            session.add(ban_list)
+
+            stmt = insert(BanList).values(
+                fid=ban_list.fid,
+                user_id=ban_list.user_id,
+                ban_time=getattr(ban_list, "ban_time", now_with_tz()),
+                operator_id=ban_list.operator_id,
+                enable=getattr(ban_list, "enable", True),
+                unban_time=getattr(ban_list, "unban_time", None),
+                unban_operator_id=getattr(ban_list, "unban_operator_id", None),
+                text_reason=ban_list.text_reason,
+                img_reason=ban_list.img_reason,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["fid", "user_id"],
+                set_={
+                    "ban_time": stmt.excluded.ban_time,
+                    "operator_id": stmt.excluded.operator_id,
+                    "enable": stmt.excluded.enable,
+                    "unban_time": stmt.excluded.unban_time,
+                    "unban_operator_id": stmt.excluded.unban_operator_id,
+                    "text_reason": stmt.excluded.text_reason,
+                    "img_reason": stmt.excluded.img_reason,
+                    "last_update": now_with_tz(),
+                },
+            )
+            await session.execute(stmt)
+
             try:
                 await session.commit()
                 return True
