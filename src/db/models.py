@@ -173,6 +173,16 @@ class BanList(TimestampMixin, Base):
             self.img_reason = []
 
 
+class ReviewConfig(TimestampMixin, Base):
+    __tablename__ = "review_config"
+
+    fid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    rule_type: Mapped[str] = mapped_column(String(50), default="关键词", nullable=False)
+    notify_type: Mapped[str] = mapped_column(String(50), default="直接删除", nullable=False)
+    rule_content: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class AssociatedData(TimestampMixin, Base):
     __tablename__ = "associated_data"
 
