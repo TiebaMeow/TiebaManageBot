@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
 from .interface import DBInterface
-from .models import SHANGHAI_TZ, BanList, BanStatus, ImgDataModel, TextDataModel, now_with_tz
+from .models import BanList, BanStatus, ImgDataModel, TextDataModel, now_with_tz
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -28,7 +28,7 @@ class AutoBanList:
             stmt = insert(BanList).values(
                 fid=ban_list.fid,
                 user_id=ban_list.user_id,
-                ban_time=getattr(ban_list, "ban_time", now_with_tz()),
+                ban_time=now_with_tz(),
                 operator_id=ban_list.operator_id,
                 enable=getattr(ban_list, "enable", True),
                 unban_time=getattr(ban_list, "unban_time", None),
@@ -120,7 +120,7 @@ class AutoBanList:
         async with DBInterface.get_session() as session:
             ban_statuses = await session.execute(
                 select(BanStatus).where(
-                    BanStatus.last_autoban < datetime.now(SHANGHAI_TZ) - timedelta(days=3),
+                    BanStatus.last_autoban < now_with_tz() - timedelta(days=3),
                 )
             )
             return list(ban_statuses.scalars().all())
