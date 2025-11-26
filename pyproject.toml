@@ -10,7 +10,6 @@ dependencies = [
     "aiotieba>=4.6.1",
     "asyncpg>=0.30.0",
     "bcrypt>=4.3.0",
-    "beanie>=2.0.0",
     "cashews[diskcache]>=7.4.1",
     "httpx>=0.28.1",
     "nb-cli>=1.4.2",
