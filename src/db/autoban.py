@@ -30,7 +30,7 @@ class AutoBanList:
                 user_id=ban_list.user_id,
                 ban_time=now_with_tz(),
                 operator_id=ban_list.operator_id,
-                enable=getattr(ban_list, "enable", True),
+                enable=True,
                 unban_time=getattr(ban_list, "unban_time", None),
                 unban_operator_id=getattr(ban_list, "unban_operator_id", None),
                 text_reason=ban_list.text_reason,
