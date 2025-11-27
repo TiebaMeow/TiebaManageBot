@@ -394,6 +394,8 @@ async def add_associate_data_receive(state: T_State, info: GroupMessageEvent = R
             else:
                 text_buffer.append(seg.data["text"])
         elif seg.type == "image":
+            if int(seg.data.get("file_size", 0)) > 10 * 1024 * 1024:
+                await add_associate_data_cmd.reject("图片过大，请尝试取消勾选“原图”。")
             img_data = await ImageUtils.download_and_save_img(
                 url=seg.data["url"], uploader_id=info.user_id, fid=group_info.fid
             )

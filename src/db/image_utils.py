@@ -96,28 +96,15 @@ class ImageUtils:
     async def download_and_save_img(
         cls, url: str, uploader_id: int, fid: int, note: str = ""
     ) -> ImgDataModel | Literal[-1, -2]:
-        @retry(**HTTPXClient.DEFAULT_RETRY)
-        async def _download() -> bytes | Literal[-2]:
-            async with HTTPXClient.get_client() as client:
-                async with client.stream("GET", url, follow_redirects=True) as resp:
-                    resp.raise_for_status()
-
-                    if content_length := resp.headers.get("content-length"):
-                        if int(content_length) > 10 * 1024 * 1024:
-                            return -2
-
-                    img_data = bytearray()
-                    async for chunk in resp.aiter_bytes():
-                        img_data.extend(chunk)
-                        if len(img_data) > 10 * 1024 * 1024:
-                            return -2
-                    return bytes(img_data)
-
         try:
-            result = await _download()
-            if result == -2:
+            resp = await HTTPXClient.get(url, follow_redirects=True)
+            if resp is None:
+                return -1
+
+            if len(resp.content) > 10 * 1024 * 1024:
                 return -2
-            return await cls.save_image(uploader_id, fid, result, note)
+
+            return await cls.save_image(uploader_id, fid, resp.content, note)
         except Exception:
             return -1
 

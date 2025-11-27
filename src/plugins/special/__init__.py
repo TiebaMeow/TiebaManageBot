@@ -394,6 +394,8 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
+            if int(segment.data.get("file_size", 0)) > 10 * 1024 * 1024:
+                await add_autoban_cmd.reject("图片过大，请尝试取消勾选“原图”。")
             img_data = await ImageUtils.download_and_save_img(
                 url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
             )
@@ -671,6 +673,8 @@ async def add_ban_reason_input(state: T_State, input_: GroupMessageEvent = Recei
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
+            if int(segment.data.get("file_size", 0)) > 10 * 1024 * 1024:
+                await add_ban_reason_cmd.reject("图片过大，请尝试取消勾选“原图”。")
             img_data = await ImageUtils.download_and_save_img(
                 url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
             )
