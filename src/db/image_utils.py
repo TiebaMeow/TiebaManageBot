@@ -40,14 +40,7 @@ class HTTPXClient:
                     timeout=cls.DEFAULT_TIMEOUT,
                     verify=cls._context,
                 )
-            try:
-                yield cls._client
-            except httpx.TransportError:
-                await cls.close()
-                cls._client = None
-                raise
-            except httpx.HTTPError:
-                raise
+            yield cls._client
 
     @classmethod
     async def close(cls):
@@ -97,13 +90,30 @@ class ImageUtils:
     async def download_and_save_img(
         cls, url: str, uploader_id: int, fid: int, note: str = ""
     ) -> ImgDataModel | Literal[-1, -2]:
-        resp = await HTTPXClient.get(url)
-        if resp is None:
+        @retry(**HTTPXClient.DEFAULT_RETRY)
+        async def _download() -> bytes | Literal[-2]:
+            async with HTTPXClient.get_client() as client:
+                async with client.stream("GET", url, follow_redirects=True) as resp:
+                    resp.raise_for_status()
+
+                    if content_length := resp.headers.get("content-length"):
+                        if int(content_length) > 10 * 1024 * 1024:
+                            return -2
+
+                    img_data = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        img_data.extend(chunk)
+                        if len(img_data) > 10 * 1024 * 1024:
+                            return -2
+                    return bytes(img_data)
+
+        try:
+            result = await _download()
+            if result == -2:
+                return -2
+            return await cls.save_image(uploader_id, fid, result, note)
+        except Exception:
             return -1
-        if len(resp.content) > 10 * 1024 * 1024:
-            return -2
-        img = resp.content
-        return await cls.save_image(uploader_id, fid, img, note)
 
     @staticmethod
     async def save_image(uploader_id: int, fid: int, img: bytes, note: str = "") -> ImgDataModel:
