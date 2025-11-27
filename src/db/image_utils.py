@@ -13,7 +13,7 @@ from .models import Image, ImgDataModel
 class HTTPXClient:
     _client: httpx.AsyncClient | None = None
     _context: ssl.SSLContext | None = None
-    _lock = asyncio.Lock()
+    _lock: asyncio.Lock | None = None
 
     DEFAULT_TIMEOUT = 10.0
 
@@ -29,25 +29,31 @@ class HTTPXClient:
     }
 
     @classmethod
+    def _get_lock(cls) -> asyncio.Lock:
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+        return cls._lock
+
+    @classmethod
     @asynccontextmanager
     async def get_client(cls):
-        async with cls._lock:
-            if cls._context is None:
-                cls._context = ssl.create_default_context()
-                cls._context.set_ciphers("DEFAULT")
-            if cls._client is None or cls._client.is_closed:
-                cls._client = httpx.AsyncClient(
-                    timeout=cls.DEFAULT_TIMEOUT,
-                    verify=cls._context,
-                )
-            yield cls._client
+        if cls._client is None or cls._client.is_closed:
+            async with cls._get_lock():
+                if cls._client is None or cls._client.is_closed:
+                    if cls._context is None:
+                        cls._context = ssl.create_default_context()
+                        cls._context.set_ciphers("DEFAULT")
+                    cls._client = httpx.AsyncClient(
+                        timeout=cls.DEFAULT_TIMEOUT,
+                        verify=cls._context,
+                    )
+        yield cls._client
 
     @classmethod
     async def close(cls):
-        async with cls._lock:
-            if cls._client and not cls._client.is_closed:
-                await cls._client.aclose()
-                cls._client = None
+        if cls._client and not cls._client.is_closed:
+            await cls._client.aclose()
+            cls._client = None
 
     @classmethod
     def configure_defaults(cls, timeout: float = DEFAULT_TIMEOUT, retry_config: dict[str, Any] | None = None):
