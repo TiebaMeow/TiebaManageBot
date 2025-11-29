@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from functools import wraps
-from inspect import iscoroutinefunction as awaitable
 from typing import TYPE_CHECKING, Any
 
 import aiotieba as tb
@@ -20,69 +19,64 @@ cache = Cache()
 cache.setup("mem://")
 
 
+def with_ensure(func):
+    @wraps(func)
+    async def wrapper(self: Client, *args, **kwargs) -> Any:
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential_jitter(initial=0.5, max=3.0),
+                retry=retry_if_exception_type((
+                    asyncio.TimeoutError,
+                    ConnectionError,
+                    OSError,
+                    HTTPStatusError,
+                    TiebaServerError,
+                )),
+                reraise=True,
+            ):
+                with attempt:
+                    ret = await func(self, *args, **kwargs)
+                    # async with self.semaphore:
+                    #     ret = await func(self, *args, **kwargs)
+
+                    err = getattr(ret, "err", None)
+                    if err is not None and isinstance(err, (HTTPStatusError, TiebaServerError)):
+                        code = getattr(err, "code", None)
+                        if code is not None and code in {
+                            -65536,
+                            11,
+                            77,
+                            408,
+                            429,
+                            4011,
+                            110001,
+                            220034,
+                            230871,
+                            300000,
+                            1989005,
+                            2210002,
+                            28113295,
+                        }:
+                            raise err
+                    return ret
+        except Exception as e:
+            log.exception(f"{func.__name__}: {e}")
+            return await func(self, *args, **kwargs)
+            # async with self.semaphore:
+            #     return await func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Client(tb.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._rl_wrapper_cache: dict[str, Any] = {}
+        self._semaphore = asyncio.Semaphore(10)
 
-    def __getattribute__(self, name: str) -> Any:
-        _oget = object.__getattribute__
-        attr = _oget(self, name) if name not in {"__dict__", "__class__"} else super().__getattribute__(name)
-
-        if name.startswith("_"):
-            return attr
-
-        is_coro = awaitable(attr) or (hasattr(attr, "__func__") and awaitable(attr.__func__))
-        if not is_coro:
-            return attr
-
-        wrapper_cache = _oget(self, "_rl_wrapper_cache") if "_rl_wrapper_cache" in _oget(self, "__dict__") else None
-        if isinstance(wrapper_cache, dict) and name in wrapper_cache:
-            return wrapper_cache[name]
-
-        @wraps(attr)
-        async def retry_wrapper(*args, **kwargs) -> Any:
-            try:
-                async for attempt in AsyncRetrying(
-                    stop=stop_after_attempt(3),
-                    wait=wait_exponential_jitter(initial=0.5, max=3.0),
-                    retry=retry_if_exception_type((
-                        asyncio.TimeoutError,
-                        ConnectionError,
-                        OSError,
-                        HTTPStatusError,
-                        TiebaServerError,
-                    )),
-                    reraise=True,
-                ):
-                    with attempt:
-                        ret = await attr(*args, **kwargs)
-                        err = getattr(ret, "err", None)
-                        if err and isinstance(err, (HTTPStatusError, TiebaServerError)):
-                            code = getattr(err, "code", None)
-                            if code is not None and code in {
-                                -65536,
-                                11,
-                                77,
-                                408,
-                                429,
-                                4011,
-                                110001,
-                                220034,
-                                230871,
-                                1989005,
-                                2210002,
-                                28113295,
-                            }:
-                                raise err
-                        return ret
-            except Exception as e:
-                log.exception(f"{name}: {e}")
-                return await attr(*args, **kwargs)
-
-        if isinstance(wrapper_cache, dict):
-            wrapper_cache[name] = retry_wrapper
-        return retry_wrapper
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        return self._semaphore
 
     async def __aenter__(self) -> Client:
         await super().__aenter__()
@@ -90,6 +84,78 @@ class Client(tb.Client):
 
     async def __aexit__(self, exc_type=None, exc_val=None, exc_tb=None):
         await super().__aexit__(exc_type, exc_val, exc_tb)
+
+    @with_ensure
+    async def get_posts(self, *args, **kwargs):
+        return await super().get_posts(*args, **kwargs)
+
+    @with_ensure
+    async def get_user_info(self, *args, **kwargs):
+        return await super().get_user_info(*args, **kwargs)
+
+    @with_ensure
+    async def del_thread(self, *args, **kwargs):
+        return await super().del_thread(*args, **kwargs)
+
+    @with_ensure
+    async def del_post(self, *args, **kwargs):
+        return await super().del_post(*args, **kwargs)
+
+    @with_ensure
+    async def tieba_uid2user_info(self, *args, **kwargs):
+        return await super().tieba_uid2user_info(*args, **kwargs)
+
+    @with_ensure
+    async def add_bawu_blacklist(self, *args, **kwargs):
+        return await super().add_bawu_blacklist(*args, **kwargs)
+
+    @with_ensure
+    async def del_bawu_blacklist(self, *args, **kwargs):
+        return await super().del_bawu_blacklist(*args, **kwargs)
+
+    @with_ensure
+    async def block(self, *args, **kwargs):
+        return await super().block(*args, **kwargs)
+
+    @with_ensure
+    async def unblock(self, *args, **kwargs):
+        return await super().unblock(*args, **kwargs)
+
+    @with_ensure
+    async def good(self, *args, **kwargs):
+        return await super().good(*args, **kwargs)
+
+    @with_ensure
+    async def ungood(self, *args, **kwargs):
+        return await super().ungood(*args, **kwargs)
+
+    @with_ensure
+    async def top(self, *args, **kwargs):
+        return await super().top(*args, **kwargs)
+
+    @with_ensure
+    async def untop(self, *args, **kwargs):
+        return await super().untop(*args, **kwargs)
+
+    @with_ensure
+    async def get_self_info(self, *args, **kwargs):
+        return await super().get_self_info(*args, **kwargs)
+
+    @with_ensure
+    async def get_user_threads(self, *args, **kwargs):
+        return await super().get_user_threads(*args, **kwargs)
+
+    @with_ensure
+    async def get_threads(self, *args, **kwargs):
+        return await super().get_threads(*args, **kwargs)
+
+    @with_ensure
+    async def get_comments(self, *args, **kwargs):
+        return await super().get_comments(*args, **kwargs)
+
+    @with_ensure
+    async def get_fid(self, *args, **kwargs):
+        return await super().get_fid(*args, **kwargs)
 
 
 @cache(ttl=180, key="get_user_threads_cached:{user_id}:{pn}")
