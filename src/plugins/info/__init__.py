@@ -3,6 +3,7 @@ import operator
 import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote_plus
 
 import httpx
 from aiotieba import ReqUInfo
@@ -102,28 +103,24 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
             user_tieba = [
                 {"tieba_name": forum.fname, "experience": forum.exp, "level": forum.level} for forum in user_tieba.objs
             ]
-        elif user_info.user_name:
+        else:
             try:
                 async with httpx.AsyncClient(verify=False, timeout=5) as session:
-                    resp = await session.get(f"https://82cat.com/tieba/forum/{user_info.user_name}/1")
+                    resp = await session.get(
+                        f"https://tb.anova.me/getLevel?fname={quote_plus(plugin_config.checkout_tieba)}&uid={tieba_id}"
+                    )
                     resp.raise_for_status()
-                    html = resp.text
-                soup = BeautifulSoup(html, "lxml")
-                table = soup.find("table", class_="table table-hover")
-                tbody = table.find("tbody")  # type: ignore
-                rows = tbody.find_all("tr")  # type: ignore
+                    resp_json = resp.json()
                 user_tieba = [
                     {
-                        "tieba_name": row.find_all("td")[0].text.strip(),  # type: ignore
-                        "experience": row.find_all("td")[1].text.strip(),  # type: ignore
-                        "level": row.find_all("td")[2].text.strip(),  # type: ignore
+                        "tieba_name": item["fname"],
+                        "experience": item["exp"],
+                        "level": item["level"],
                     }
-                    for row in rows
+                    for item in resp_json.get("result", [])
                 ]
             except Exception:
                 user_tieba = []
-        else:
-            user_tieba = []
 
         user_posts_count = {}
 

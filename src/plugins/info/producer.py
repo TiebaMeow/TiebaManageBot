@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from src.common import get_user_posts_cached
 from src.db import TiebaNameCache
 from src.utils import text_to_image
 
@@ -32,7 +33,7 @@ class Producer:
     async def _fetch_batch(self) -> bool:
         """获取单个批次的数据"""
         tasks = [
-            self.client.get_user_posts(self.user_id, pn=page, rn=50)
+            get_user_posts_cached(self.client, self.user_id, pn=page, rn=50)
             for page in range(self.current_page, self.current_page + self.batch_size)
         ]
         results = await asyncio.gather(*tasks)
