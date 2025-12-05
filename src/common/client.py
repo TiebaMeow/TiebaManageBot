@@ -41,24 +41,27 @@ def with_ensure(func):
                     #     ret = await func(self, *args, **kwargs)
 
                     err = getattr(ret, "err", None)
-                    if err is not None and isinstance(err, (HTTPStatusError, TiebaServerError)):
-                        code = getattr(err, "code", None)
-                        if code is not None and code in {
-                            -65536,
-                            11,
-                            77,
-                            408,
-                            429,
-                            4011,
-                            110001,
-                            220034,
-                            230871,
-                            300000,
-                            1989005,
-                            2210002,
-                            28113295,
-                        }:
-                            raise err
+                    if err is not None:
+                        if isinstance(err, (HTTPStatusError, TiebaServerError)):
+                            code = getattr(err, "code", None)
+                            if code is not None and code in {
+                                -65536,
+                                11,
+                                77,
+                                408,
+                                429,
+                                4011,
+                                110001,
+                                220034,
+                                230871,
+                                300000,
+                                1989005,
+                                2210002,
+                                28113295,
+                            }:
+                                raise err
+                        else:
+                            log.warning(f"{func.__name__} returned error: {err}")
                     return ret
         except Exception as e:
             log.exception(f"{func.__name__}: {e}")
