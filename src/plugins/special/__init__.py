@@ -273,6 +273,7 @@ async def add_autoban_handle(
     state["user_infos"] = user_infos
     state["text_reasons"] = []
     state["img_reasons"] = []
+    state["pending_imgs"] = []
     current_user = user_infos[0]
     state["current_user"] = current_user
     # await add_autoban_cmd.send(
@@ -344,6 +345,7 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
         await add_autoban_cmd.finish("处理完成。")
     text_reasons = state["text_reasons"]
     img_reasons = state["img_reasons"]
+    pending_imgs = state.setdefault("pending_imgs", [])
     msg = input_.message
     if msg.extract_plain_text() == "确认":
         state["current_user"] = None
@@ -371,7 +373,28 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
                     f"{await TiebaNameCache.get(group_info.fid)}"
                 )
                 # await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 封禁操作失败。")
+
+        if pending_imgs:
+            new_img_reasons = []
+            failed_count = 0
+            for img_info in pending_imgs:
+                img_data = await ImageUtils.download_and_save_img(
+                    url=img_info["url"], uploader_id=input_.user_id, fid=group_info.fid, note=img_info["note"]
+                )
+                if isinstance(img_data, int):
+                    failed_count += 1
+                else:
+                    new_img_reasons.append(img_data)
+
+            if new_img_reasons:
+                img_reasons.extend(new_img_reasons)
+                await AutoBanList.update_ban_reason(group_info.fid, current_user.user_id, img_reason=img_reasons)
+
+            if failed_count > 0:
+                await add_autoban_cmd.send(f"{failed_count} 张图片下载失败，已跳过。")
+
         user_infos.remove(current_user)
+        state["pending_imgs"] = []
         if not user_infos:
             await add_autoban_cmd.finish("处理完成。")
         else:
@@ -388,37 +411,34 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
     for segment in msg:
         if segment.type == "text":
             if img_buffer:
-                img_reason = img_buffer.pop()
-                img_reason.note = segment.data["text"]
-                img_reasons.append(img_reason)
+                img_info = img_buffer.pop()
+                img_info["note"] = segment.data["text"]
+                pending_imgs.append(img_info)
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
             if int(segment.data.get("file_size", 0)) > 10 * 1024 * 1024:
                 await add_autoban_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-            img_data = await ImageUtils.download_and_save_img(
-                url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
-            )
-            if img_data == -1:
-                await add_autoban_cmd.reject("图片下载失败，请尝试重新发送。")
-            elif img_data == -2:
-                await add_autoban_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-            img_reason = img_data
+            img_info = {"url": segment.data["url"], "note": ""}
             if text_buffer:
                 note = text_buffer.pop()
-                img_reason.note = note
-                img_reasons.append(img_reason)
+                img_info["note"] = note
+                pending_imgs.append(img_info)
             else:
-                img_buffer.append(img_reason)
+                img_buffer.append(img_info)
     for text in text_buffer:
         text_reasons.append(TextDataModel(uploader_id=input_.user_id, fid=group_info.fid, text=text))
-    for img in img_buffer:
-        img_reasons.append(img)
+    for img_info in img_buffer:
+        pending_imgs.append(img_info)
     if len(text_reasons) >= 10:
         text_reasons = text_reasons[:10]
         await add_autoban_cmd.send("文字数量已达上限，请确认操作。")
-    if len(img_reasons) >= 10:
-        img_reasons = img_reasons[:10]
+    if len(img_reasons) + len(pending_imgs) >= 10:
+        allowed = 10 - len(img_reasons)
+        if allowed < 0:
+            allowed = 0
+        if len(pending_imgs) > allowed:
+            pending_imgs[:] = pending_imgs[:allowed]
         await add_autoban_cmd.send("图片数量已达上限，请确认操作。")
     await add_autoban_cmd.reject()
 
@@ -642,6 +662,7 @@ async def add_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_
     state["user_info"] = user_info
     state["text_reasons"] = ban_reason.text_reason
     state["img_reasons"] = ban_reason.img_reason
+    state["pending_imgs"] = []
     await add_ban_reason_cmd.send("请输入循封或解除循封原因，输入“确认”以结束，或输入“取消”取消操作。")
 
 
@@ -651,6 +672,7 @@ async def add_ban_reason_input(state: T_State, input_: GroupMessageEvent = Recei
     user_info = state["user_info"]
     text_reasons = state["text_reasons"]
     img_reasons = state["img_reasons"]
+    pending_imgs = state.setdefault("pending_imgs", [])
     text_buffer = []
     img_buffer = []
     msg = input_.message
@@ -661,43 +683,60 @@ async def add_ban_reason_input(state: T_State, input_: GroupMessageEvent = Recei
         )
         if not result:
             await add_ban_reason_cmd.finish("数据库操作失败。")
+
+        if pending_imgs:
+            new_img_reasons = []
+            failed_count = 0
+            for img_info in pending_imgs:
+                img_data = await ImageUtils.download_and_save_img(
+                    url=img_info["url"], uploader_id=input_.user_id, fid=group_info.fid, note=img_info["note"]
+                )
+                if isinstance(img_data, int):
+                    failed_count += 1
+                else:
+                    new_img_reasons.append(img_data)
+
+            if new_img_reasons:
+                img_reasons.extend(new_img_reasons)
+                await AutoBanList.update_ban_reason(group_info.fid, user_info.user_id, img_reason=img_reasons)
+
+            if failed_count > 0:
+                await add_ban_reason_cmd.send(f"{failed_count} 张图片下载失败，已跳过。")
+
         await add_ban_reason_cmd.finish("操作完成。")
     elif msg.extract_plain_text() == "取消":
         await add_ban_reason_cmd.finish("操作已取消。")
     for segment in msg:
         if segment.type == "text":
             if img_buffer:
-                img_reason = img_buffer.pop()
-                img_reason.note = segment.data["text"]
-                img_reasons.append(img_reason)
+                img_info = img_buffer.pop()
+                img_info["note"] = segment.data["text"]
+                pending_imgs.append(img_info)
             else:
                 text_buffer.append(segment.data["text"])
         elif segment.type == "image":
             if int(segment.data.get("file_size", 0)) > 10 * 1024 * 1024:
                 await add_ban_reason_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-            img_data = await ImageUtils.download_and_save_img(
-                url=segment.data["url"], uploader_id=input_.user_id, fid=group_info.fid
-            )
-            if img_data == -1:
-                await add_ban_reason_cmd.reject("图片下载失败，请尝试重新发送。")
-            elif img_data == -2:
-                await add_ban_reason_cmd.reject("图片过大，请尝试取消勾选“原图”。")
-            img_reason = img_data
+            img_info = {"url": segment.data["url"], "note": ""}
             if text_buffer:
                 note = text_buffer.pop()
-                img_reason.note = note
-                img_reasons.append(img_reason)
+                img_info["note"] = note
+                pending_imgs.append(img_info)
             else:
-                img_buffer.append(img_reason)
+                img_buffer.append(img_info)
     for text in text_buffer:
         text_reasons.append(TextDataModel(uploader_id=input_.user_id, fid=group_info.fid, text=text))
-    for img in img_buffer:
-        img_reasons.append(img)
+    for img_info in img_buffer:
+        pending_imgs.append(img_info)
     if len(text_reasons) >= 10:
         text_reasons = text_reasons[:10]
         await add_ban_reason_cmd.send("文字数量已达上限，请确认操作。")
-    if len(img_reasons) >= 10:
-        img_reasons = img_reasons[:10]
+    if len(img_reasons) + len(pending_imgs) >= 10:
+        allowed = 10 - len(img_reasons)
+        if allowed < 0:
+            allowed = 0
+        if len(pending_imgs) > allowed:
+            pending_imgs[:] = pending_imgs[:allowed]
         await add_ban_reason_cmd.send("图片数量已达上限，请确认操作。")
     await add_ban_reason_cmd.reject()
 
