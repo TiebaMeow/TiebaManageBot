@@ -6,7 +6,7 @@ from typing import Literal
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
-from nonebot_plugin_alconna import AlconnaMatcher
+from nonebot.matcher import Matcher, current_matcher
 
 from src.common import Client
 from src.db import GroupCache
@@ -81,7 +81,13 @@ def require_bduss(kind: Literal["slave", "master", "STOKEN"]):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             event = kwargs.get("event") or next((a for a in args if isinstance(a, GroupMessageEvent)), None)
-            matcher = kwargs.get("matcher") or next((a for a in args if isinstance(a, AlconnaMatcher)), None)
+            matcher = kwargs.get("matcher") or next((a for a in args if isinstance(a, Matcher)), None)
+
+            if matcher is None:
+                try:
+                    matcher = current_matcher.get()
+                except LookupError:
+                    pass
 
             if event is None or matcher is None:
                 # 注入失败时不阻断流程
