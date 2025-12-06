@@ -47,7 +47,7 @@ async def autoban():
         log.info(f"Ready to autoban in {group_info.fname}")
         async with Client(group_info.slave_bduss, try_ws=True) as client:
             async for user_id in AutoBanList.get_autoban_lists(forum.fid):
-                result = await client.block(group_info.fid, user_id, day=10, reason="违规")
+                result = await client.block(group_info.fid, user_id, day=10)
                 if not result:
                     failed.append(user_id)
         await AutoBanList.update_autoban(group_info.fid, group_info.group_id)
