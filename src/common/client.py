@@ -15,6 +15,11 @@ from logger import log
 if TYPE_CHECKING:
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
 
+
+class NeedRetryError(Exception):
+    pass
+
+
 cache = Cache()
 cache.setup("mem://")
 
@@ -32,6 +37,7 @@ def with_ensure(func):
                     OSError,
                     HTTPStatusError,
                     TiebaServerError,
+                    NeedRetryError,
                 )),
                 reraise=True,
             ):
@@ -61,7 +67,7 @@ def with_ensure(func):
                             }:
                                 raise err
                         else:
-                            log.warning(f"{func.__name__} returned error: {err}")
+                            log.exception(f"{func.__name__} returned error: {err}")
                     return ret
         except Exception as e:
             log.exception(f"{func.__name__}: {e}")
@@ -106,7 +112,10 @@ class Client(tb.Client):
 
     @with_ensure
     async def tieba_uid2user_info(self, *args, **kwargs):
-        return await super().tieba_uid2user_info(*args, **kwargs)
+        ret = await super().tieba_uid2user_info(*args, **kwargs)
+        if ret.user_id == 0:
+            raise NeedRetryError("tieba_uid2user_info returned user_id 0")
+        return ret
 
     @with_ensure
     async def add_bawu_blacklist(self, *args, **kwargs):
