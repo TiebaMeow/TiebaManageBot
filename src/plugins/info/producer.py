@@ -11,23 +11,15 @@ if TYPE_CHECKING:
     from src.common import Client
 
 
-class AlwaysEqual:
-    def __eq__(self, _):
-        return True
-
-
 class Producer:
     def __init__(self, client: Client, user_id: int, fids: list[int] | None):
-        self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=100)
+        self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=4)
         self.buffer: list[dict[str, str]] = []
         self.user_id = user_id
-        self.fids = fids or [AlwaysEqual()]
+        self.fids = set(fids) if fids else None
         self.client = client
         self.current_page = 1
         self.batch_size = 10 if fids else 4
-        self.active = True
-        self.lock = asyncio.Lock()
-        self.cond = asyncio.Condition()
         self.producer_task = asyncio.create_task(self._producer())
 
     async def _fetch_batch(self) -> bool:
@@ -38,18 +30,26 @@ class Producer:
         ]
         results = await asyncio.gather(*tasks)
         has_empty = False
+        new_items = []
+
         for result in results:
             if not result.objs:
                 has_empty = True
                 break
-            self.buffer.extend([
-                {
-                    "tieba_name": str(await TiebaNameCache.get(post.fid)) + "吧",
-                    "post_content": "\n".join([("  - " + obj.contents.text.replace("\\n", " ")) for obj in post.objs]),
-                }
-                for post in result.objs
-                if post.fid in self.fids
-            ])
+
+            for post in result.objs:
+                if self.fids is not None and post.fid not in self.fids:
+                    continue
+
+                tieba_name = str(await TiebaNameCache.get(post.fid)) + "吧"
+                post_content = "\n".join([("  - " + obj.contents.text.replace("\\n", " ")) for obj in post.objs])
+
+                new_items.append({
+                    "tieba_name": tieba_name,
+                    "post_content": post_content,
+                })
+
+        self.buffer.extend(new_items)
         return has_empty
 
     async def _generate_msg(self, posts: list[dict[str, str]]) -> bytes:
@@ -59,41 +59,38 @@ class Producer:
 
     async def _producer(self):
         """生产者主循环"""
-        while self.active:
-            async with self.cond:
-                await self.cond.wait_for(lambda: self.queue.qsize() < 4 or not self.active)
-                if not self.active:
-                    return
-            has_empty = False
-            if len(self.buffer) < 20:
-                has_empty = await self._fetch_batch()
-                self.current_page += self.batch_size
-            else:
-                await self.queue.put(await self._generate_msg(self.buffer[:20]))
-                await asyncio.sleep(0)
-                self.buffer = self.buffer[20:]
-                continue
-            if has_empty:
-                if self.buffer:
-                    await self.queue.put(await self._generate_msg(self.buffer[:20]))
-                await self.queue.put(None)
-                return
+        try:
+            while True:
+                if len(self.buffer) < 20:
+                    has_empty = await self._fetch_batch()
+                    self.current_page += self.batch_size
+
+                    if has_empty:
+                        while self.buffer:
+                            chunk = self.buffer[:20]
+                            self.buffer = self.buffer[20:]
+                            await self.queue.put(await self._generate_msg(chunk))
+                        await self.queue.put(None)
+                        return
+                else:
+                    chunk = self.buffer[:20]
+                    self.buffer = self.buffer[20:]
+                    await self.queue.put(await self._generate_msg(chunk))
+
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            await self.queue.put(None)
 
     async def get(self) -> bytes | None:
         """获取数据"""
-        try:
-            data = await self.queue.get()
-            return data
-        finally:
-            async with self.lock:
-                async with self.cond:
-                    self.cond.notify_all()
+        return await self.queue.get()
 
     async def stop(self):
         """停止数据获取"""
-        async with self.lock:
-            if self.active:
-                self.active = False
-                async with self.cond:
-                    self.cond.notify_all()
+        if not self.producer_task.done():
+            self.producer_task.cancel()
+            try:
                 await self.producer_task
+            except asyncio.CancelledError:
+                pass

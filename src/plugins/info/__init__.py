@@ -86,7 +86,6 @@ checkout_cmd = on_alconna(
 
 
 @checkout_cmd.handle()
-@require_slave_BDUSS
 async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
@@ -94,7 +93,7 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     await checkout_cmd.send("正在查询...")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
+    async with Client(group_info.slave_bduss) as client:
         user_info = await client.tieba_uid2user_info(tieba_id)
         nick_name_old_info = await client.get_user_info(user_info.user_id, require=ReqUInfo.BASIC)
         nick_name_old = nick_name_old_info.nick_name_old
@@ -255,7 +254,7 @@ async def get_specific_posts(check_posts_cmd: AlconnaMatcher, tieba_id: int, fid
 async def consumer(producer: Producer, check_posts_cmd: type[AlconnaMatcher]):
     specific_posts = await producer.get()
     if specific_posts is None:
-        if isinstance(producer.fids[0], int):
+        if producer.fids is not None:
             await check_posts_cmd.send("未能查询到该用户在指定吧的发言。")
         else:
             await check_posts_cmd.send("未能查询到该用户发言，可能该用户已隐藏发言。")
@@ -309,7 +308,7 @@ async def check_posts_handle(
         await check_posts_cmd.finish("贴吧ID格式错误，请检查输入。")
     group_info = await GroupCache.get(event.group_id)
     assert group_info is not None  # for pylance
-    async with Client(try_ws=True) as client:
+    async with Client() as client:
         fids = []
         if tieba_names.result:
             for tieba_name in tieba_names.result:
