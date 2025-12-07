@@ -367,12 +367,15 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
                 text_data=[TextDataModel(uploader_id=input_.user_id, fid=group_info.fid, text="[自动添加]循封")],
             )
         async with Client(group_info.slave_bduss, try_ws=True) as client:
-            if not await client.block(group_info.fid, current_user.user_id, day=10, reason="违规"):
+            if not await client.block(group_info.fid, current_user.user_id, day=10):
                 log.warning(
                     f"Failed to block user {current_user.nick_name}({current_user.tieba_uid}) in "
                     f"{await TiebaNameCache.get(group_info.fid)}"
                 )
-                # await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 封禁操作失败。")
+                await add_autoban_cmd.send(
+                    f"用户 {current_user.nick_name}({current_user.tieba_uid}) "
+                    "数据库操作成功，贴吧封禁失败，请考虑手动添加封禁。"
+                )
 
         if pending_imgs:
             new_img_reasons = []
