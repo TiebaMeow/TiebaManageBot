@@ -127,7 +127,12 @@ class Client(tb.Client):
 
     @with_ensure
     async def block(self, *args, **kwargs):
-        return await super().block(*args, **kwargs)
+        ret = await super().block(*args, **kwargs)
+        err = getattr(ret, "err", None)
+        if err is not None:
+            if "Connection timeout" in str(err):
+                raise NeedRetryError("block operation timed out")
+        return ret
 
     @with_ensure
     async def unblock(self, *args, **kwargs):
@@ -170,11 +175,19 @@ class Client(tb.Client):
         return await super().get_fid(*args, **kwargs)
 
 
-@cache(ttl=180, key="get_user_threads_cached:{user_id}:{pn}")
 async def get_user_threads_cached(client: Client, user_id: int, pn: int) -> UserThreads:
-    return await client.get_user_threads(user_id, pn=pn)
+    key = f"get_user_threads_cached:{user_id}:{pn}"
+    if ret := await cache.get(key):
+        return ret
+    ret = await client.get_user_threads(user_id, pn=pn)
+    await cache.set(key, ret, expire=180)
+    return ret
 
 
-@cache(ttl=180, key="get_user_posts_cached:{user_id}:{pn}:{rn}")
 async def get_user_posts_cached(client: Client, user_id: int, pn: int, rn: int) -> UserPostss:
-    return await client.get_user_posts(user_id, pn=pn, rn=rn)
+    key = f"get_user_posts_cached:{user_id}:{pn}:{rn}"
+    if ret := await cache.get(key):
+        return ret
+    ret = await client.get_user_posts(user_id, pn=pn, rn=rn)
+    await cache.set(key, ret, expire=180)
+    return ret
