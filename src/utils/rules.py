@@ -1,12 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from nonebot.adapters import Bot
+from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
 
 from src.db.crud import get_all_groups, get_group
-
-if TYPE_CHECKING:
-    from nonebot.adapters import Bot
-    from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
 
 
 async def rule_owner(bot: Bot, event: GroupMessageEvent) -> bool:
