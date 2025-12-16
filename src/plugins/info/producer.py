@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from src.common import get_user_posts_cached
-from src.db import TiebaNameCache
+from src.common.cache import get_tieba_name
 from src.utils import text_to_image
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ class Producer:
                 if self.fids is not None and post.fid not in self.fids:
                     continue
 
-                tieba_name = str(await TiebaNameCache.get(post.fid)) + "吧"
+                tieba_name = str(await get_tieba_name(post.fid)) + "吧"
                 post_content = "\n".join([("  - " + obj.contents.text.replace("\\n", " ")) for obj in post.objs])
 
                 new_items.append({

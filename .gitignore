@@ -215,3 +215,4 @@ autoban_list
 *.pdf
 .env.prod
 copilot-instructions.md
+*.bak
