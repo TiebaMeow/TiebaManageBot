@@ -97,10 +97,10 @@ async def update_ban_reason(
         if not ban_list:
             return False
 
-        if text_reason:
-            ban_list.text_reason = [*ban_list.text_reason, *text_reason]
-        if img_reason:
-            ban_list.img_reason = [*ban_list.img_reason, *img_reason]
+        if text_reason is not None:
+            ban_list.text_reason = text_reason
+        if img_reason is not None:
+            ban_list.img_reason = img_reason
 
         try:
             await session.commit()

@@ -109,7 +109,7 @@ async def delete_posts(
 
 
 async def blacklist_users(
-    client: Client, group_info: GroupInfo, uids: Iterable[int], uploader_id: int, unblacklist: bool = False
+    client: Client, group_info: GroupInfo, uids: Iterable[int], uploader_id: int, blacklist: bool = True
 ) -> tuple[list[int], list[int]]:
     """
     拉黑/取消拉黑用户并记录操作。
@@ -119,7 +119,7 @@ async def blacklist_users(
         group_info: GroupInfo
         uids: 要拉黑/取消拉黑的贴吧UID列表
         uploader_id: 执行操作的用户ID
-        unblacklist: 是否为取消拉黑操作，默认为 False（拉黑）
+        blacklist: 是否为拉黑操作，默认为 True（拉黑）
 
     Returns:
         (succeeded_uids, failed_uids)
@@ -129,9 +129,9 @@ async def blacklist_users(
     for tieba_uid in uids:
         user_info = await client.tieba_uid2user_info(tieba_uid)
         result = (
-            await client.del_bawu_blacklist(group_info.fid, user_info.user_id)
-            if unblacklist
-            else await client.add_bawu_blacklist(group_info.fid, user_info.user_id)
+            await client.add_bawu_blacklist(group_info.fid, user_info.user_id)
+            if blacklist
+            else await client.del_bawu_blacklist(group_info.fid, user_info.user_id)
         )
         if result:
             succeeded.append(tieba_uid)
@@ -142,7 +142,7 @@ async def blacklist_users(
                     TextDataModel(
                         uploader_id=uploader_id,
                         fid=group_info.fid,
-                        text=f"[自动添加]{'取消拉黑' if unblacklist else '拉黑'}",
+                        text=f"[自动添加]{'拉黑' if blacklist else '取消拉黑'}",
                     )
                 ],
             )

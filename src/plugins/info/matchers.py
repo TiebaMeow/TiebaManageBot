@@ -238,10 +238,10 @@ async def add_associate_data_receive(state: T_State, info: GroupMessageEvent = R
     text_reasons.extend(TextDataModel(uploader_id=info.user_id, fid=group_info.fid, text=text) for text in text_buffer)
     img_reasons.extend(list(img_buffer))
     if len(text_reasons) >= 10:
-        text_reasons = text_reasons[:10]
+        text_reasons[:] = text_reasons[:10]
         await add_associate_data_cmd.send("文字数量已达上限，请确认操作。")
     if len(img_reasons) >= 10:
-        img_reasons = img_reasons[:10]
+        img_reasons[:] = img_reasons[:10]
         await add_associate_data_cmd.send("图片数量已达上限，请确认操作。")
     await add_associate_data_cmd.reject()
 

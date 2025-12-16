@@ -131,13 +131,13 @@ async def blacklist_handle(
 ):
     group_info = await get_group(event.group_id)
     cmd = args.context["$shortcut.regex_match"].group()[1:]
-    blacklist = cmd == "拉黑"
+    is_blacklist = cmd == "拉黑"
     uids = await handle_tieba_uids(user_ids.result)
     if 0 in uids:
         await blacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     async with Client(group_info.master_bduss, try_ws=True) as client:
-        succeeded, failed = await service.blacklist_users(client, group_info, uids, event.user_id, blacklist)
+        succeeded, failed = await service.blacklist_users(client, group_info, uids, event.user_id, is_blacklist)
 
     succeeded_str = f"\n成功{cmd}{len(succeeded)}个用户。" if succeeded else ""
     failed_str = f"\n以下用户{cmd}失败：{', '.join('tieba_uid=' + str(uid) for uid in failed)}" if failed else ""

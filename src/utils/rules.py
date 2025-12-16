@@ -15,22 +15,25 @@ async def rule_owner(bot: Bot, event: GroupMessageEvent) -> bool:
 
 
 async def is_master(user_id: int, group_id: int) -> bool:
-    group_info = await get_group(group_id)
-    if group_info is None:
+    try:
+        group_info = await get_group(group_id)
+    except KeyError:
         return False
     return user_id == group_info.master
 
 
 async def is_admin(user_id: int, group_id: int) -> bool:
-    group_info = await get_group(group_id)
-    if group_info is None:
+    try:
+        group_info = await get_group(group_id)
+    except KeyError:
         return False
     return user_id in group_info.admins or await is_master(user_id, group_id)
 
 
 async def is_moderator(user_id: int, group_id: int) -> bool:
-    group_info = await get_group(group_id)
-    if group_info is None:
+    try:
+        group_info = await get_group(group_id)
+    except KeyError:
         return False
     return user_id in group_info.moderators or await is_admin(user_id, group_id)
 
