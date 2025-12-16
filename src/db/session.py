@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -8,8 +9,15 @@ from .models import Base
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
+project_root = Path(__file__).resolve().parents[2]
+data_dir = project_root / "data"
+data_dir.mkdir(parents=True, exist_ok=True)
 
-async def init_db(db_url: str) -> None:
+db_path = data_dir / "tiebabot.db"
+db_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+
+
+async def init_db() -> None:
     global _engine, _sessionmaker
     _engine = create_async_engine(db_url, echo=False, future=True)
     _sessionmaker = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
