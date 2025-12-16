@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nonebot import get_driver
-from playwright.async_api import async_playwright
+from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 if TYPE_CHECKING:
     from aiotieba.api.get_comments._classdef import Comment, Post_c
@@ -18,46 +18,57 @@ driver = get_driver()
 
 
 class ChromiumCache:
-    # 将浏览器实例放入类属性中
-    _p = None
-    browser = None
-    context = None
+    _p: Playwright | None = None
+    _browser: Browser | None = None
+    _context: BrowserContext | None = None
+
+    @classmethod
+    async def get_browser(cls) -> Browser:
+        if cls._browser is None:
+            await cls.initialize()
+        if cls._browser is None:
+            raise RuntimeError("Failed to initialize browser")
+        return cls._browser
+
+    @classmethod
+    async def get_context(cls) -> BrowserContext:
+        if cls._context is None:
+            await cls.initialize()
+        if cls._context is None:
+            raise RuntimeError("Failed to initialize browser context")
+        return cls._context
 
     @classmethod
     async def initialize(cls):
         if cls._p is None:
             cls._p = await async_playwright().start()
-            cls.browser = await cls._p.chromium.launch(
+        if cls._browser is None:
+            cls._browser = await cls._p.chromium.launch(
                 headless=True,
                 args=[
                     "--allow-file-access-from-files"  # 允许加载本地文件
                 ],
             )
-            cls.context = await cls.browser.new_context()
+        if cls._context is None:
+            cls._context = await cls._browser.new_context()
 
     @classmethod
     async def close(cls):
         # 清理资源
-        if cls.context:
+        if cls._context:
             try:
-                # 先关闭所有页面
-                for page in cls.context.pages:
-                    try:
-                        await page.close()
-                    except Exception:
-                        pass
-                await cls.context.close()
+                await cls._context.close()
             except Exception:
                 pass
             finally:
-                cls.context = None
-        if cls.browser:
+                cls._context = None
+        if cls._browser:
             try:
-                await cls.browser.close()
+                await cls._browser.close()
             except Exception:
                 pass
             finally:
-                cls.browser = None
+                cls._browser = None
         if cls._p:
             try:
                 await cls._p.stop()
@@ -71,7 +82,6 @@ class ChromiumCache:
 async def init_chromium():
     try:
         await ChromiumCache.initialize()
-        assert ChromiumCache.browser is not None
     except Exception:
         pass
 
@@ -85,10 +95,7 @@ async def close_chromium():
 
 
 async def text_to_image(text: str, font_size: int = 20) -> bytes:
-    if ChromiumCache.context is None:
-        await ChromiumCache.initialize()
-    context = ChromiumCache.context
-    assert context is not None
+    context = await ChromiumCache.get_context()
 
     wrapped_text = ""
     for line in text.split("\n"):
@@ -194,10 +201,7 @@ def _extract_images(obj: Post_c | Thread_p | Post) -> list[str]:
 
 
 async def _screenshot_html(html_content: str, width: int = 720, jpeg_quality: int = 80) -> bytes:
-    if ChromiumCache.context is None:
-        await ChromiumCache.initialize()
-    context = ChromiumCache.context
-    assert context is not None
+    context = await ChromiumCache.get_context()
     page = await context.new_page()
     try:
         await page.set_viewport_size({"width": width, "height": 100})

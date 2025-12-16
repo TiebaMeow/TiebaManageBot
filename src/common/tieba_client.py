@@ -5,6 +5,8 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any
 
 import aiotieba as tb
+from aiotieba import ReqUInfo
+from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from aiotieba.exception import HTTPStatusError, TiebaServerError
 from cashews import Cache
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt
@@ -14,6 +16,8 @@ from logger import log
 
 if TYPE_CHECKING:
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
+    from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
+    from aiotieba.typing import UserInfo
 
 
 class NeedRetryError(Exception):
@@ -102,6 +106,10 @@ class Client(tb.Client):
     async def get_user_info(self, *args, **kwargs):
         return await super().get_user_info(*args, **kwargs)
 
+    async def get_nickname_old(self, user_id: int) -> str:
+        user_info = await self.get_user_info(user_id, require=ReqUInfo.BASIC)
+        return user_info.nick_name_old
+
     @with_ensure
     async def del_thread(self, *args, **kwargs):
         return await super().del_thread(*args, **kwargs)
@@ -111,10 +119,22 @@ class Client(tb.Client):
         return await super().del_post(*args, **kwargs)
 
     @with_ensure
-    async def tieba_uid2user_info(self, *args, **kwargs):
-        ret = await super().tieba_uid2user_info(*args, **kwargs)
+    async def tieba_uid2user_info(self, tieba_uid: int):
+        ret = await super().tieba_uid2user_info(tieba_uid)
         if ret.user_id == 0:
             raise NeedRetryError("tieba_uid2user_info returned user_id 0")
+        return ret
+
+    @with_ensure
+    async def anyid_to_user_info(self, tieba_uid: int | str) -> UserInfo_TUid | UserInfo:
+        if isinstance(tieba_uid, str):
+            if tieba_uid.isdigit():
+                tieba_uid = int(tieba_uid)
+            ret = await super().get_user_info(tieba_uid)
+        else:
+            ret = await super().tieba_uid2user_info(tieba_uid)
+        if ret.user_id == 0:
+            raise NeedRetryError("anyid_to_user_info returned user_id 0")
         return ret
 
     @with_ensure
