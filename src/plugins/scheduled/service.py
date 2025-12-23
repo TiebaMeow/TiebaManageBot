@@ -4,9 +4,8 @@ import time
 from typing import TYPE_CHECKING, NamedTuple
 
 from logger import log
-from src.common import Client
+from src.common.cache import ClientCache, get_tieba_name
 from src.common.cache.appeal import del_appeal_id, get_appeals, set_appeal_id, set_appeals
-from src.common.cache.tieba_name import get_tieba_name
 from src.db import TextDataModel
 from src.db.crud import (
     add_associated_data,
@@ -36,11 +35,11 @@ async def run_autoban() -> None:
 
         failed = []
         log.info(f"Ready to autoban in {group_info.fname}")
-        async with Client(group_info.slave_bduss, try_ws=True) as client:
-            async for user_id in get_autoban_lists(forum.fid):
-                result = await client.block(group_info.fid, user_id, day=10)
-                if not result:
-                    failed.append(user_id)
+        client = await ClientCache.get_bawu_client(group_info.group_id)
+        async for user_id in get_autoban_lists(forum.fid):
+            result = await client.block(group_info.fid, user_id, day=10)
+            if not result:
+                failed.append(user_id)
         await update_autoban(group_info.fid, group_info.group_id)
         if failed:
             log.warning(f"Failed to ban users: {', '.join(map(str, failed))} in {await get_tieba_name(group_info.fid)}")
@@ -77,64 +76,64 @@ async def process_appeals_for_group(group_info: GroupInfo) -> AppealNotification
     if not group_info.slave_bduss or not group_info.group_args.get("appeal_sub", False):
         return notifications
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        appeals = await client.get_unblock_appeals(group_info.fid, rn=20)
-        cached_appeals = await get_appeals(group_info.group_id)
+    client = await ClientCache.get_bawu_client(group_info.group_id)
+    appeals = await client.get_unblock_appeals(group_info.fid, rn=20)
+    cached_appeals = await get_appeals(group_info.group_id)
 
-        for appeal in appeals.objs:
-            user_info = await client.get_user_info(appeal.user_id)
-            banlist, _ = await get_ban_status(group_info.fid, user_info.user_id)
+    for appeal in appeals.objs:
+        user_info = await client.get_user_info(appeal.user_id)
+        banlist, _ = await get_ban_status(group_info.fid, user_info.user_id)
 
-            # 自动拒绝已循封用户的申诉
-            if banlist == "banned":
-                await client.handle_unblock_appeals(
+        # 自动拒绝已循封用户的申诉
+        if banlist == "banned":
+            await client.handle_unblock_appeals(
+                group_info.fid,
+                appeal_ids=[appeal.appeal_id],
+                refuse=True,
+            )
+            continue
+
+        # 超时自动拒绝申诉
+        if group_info.group_args.get("appeal_autodeny", False):
+            if time.time() - appeal.appeal_time > 72000:
+                result = await client.handle_unblock_appeals(
                     group_info.fid,
                     appeal_ids=[appeal.appeal_id],
                     refuse=True,
                 )
+                if result:
+                    await add_associated_data(
+                        user_info,
+                        group_info,
+                        text_data=[
+                            TextDataModel(
+                                uploader_id=0,
+                                fid=group_info.fid,
+                                text="[自动添加]超时自动拒绝申诉",
+                            )
+                        ],
+                    )
+                    notifications.auto_deny.append(
+                        AutoDenyNotification(
+                            group_id=group_info.group_id,
+                            user_info=user_info,
+                        )
+                    )
+                if (appeal.appeal_id, user_info.user_id) in cached_appeals:
+                    cached_appeals.remove((appeal.appeal_id, user_info.user_id))
                 continue
 
-            # 超时自动拒绝申诉
-            if group_info.group_args.get("appeal_autodeny", False):
-                if time.time() - appeal.appeal_time > 72000:
-                    result = await client.handle_unblock_appeals(
-                        group_info.fid,
-                        appeal_ids=[appeal.appeal_id],
-                        refuse=True,
-                    )
-                    if result:
-                        await add_associated_data(
-                            user_info,
-                            group_info,
-                            text_data=[
-                                TextDataModel(
-                                    uploader_id=0,
-                                    fid=group_info.fid,
-                                    text="[自动添加]超时自动拒绝申诉",
-                                )
-                            ],
-                        )
-                        notifications.auto_deny.append(
-                            AutoDenyNotification(
-                                group_id=group_info.group_id,
-                                user_info=user_info,
-                            )
-                        )
-                    if (appeal.appeal_id, user_info.user_id) in cached_appeals:
-                        cached_appeals.remove((appeal.appeal_id, user_info.user_id))
-                    continue
-
-            # 推送新申诉
-            if (appeal.appeal_id, user_info.user_id) not in cached_appeals:
-                notifications.new_appeal.append(
-                    NewAppealNotification(
-                        group_id=group_info.group_id,
-                        user_info=user_info,
-                        appeal=appeal,
-                    )
+        # 推送新申诉
+        if (appeal.appeal_id, user_info.user_id) not in cached_appeals:
+            notifications.new_appeal.append(
+                NewAppealNotification(
+                    group_id=group_info.group_id,
+                    user_info=user_info,
+                    appeal=appeal,
                 )
+            )
 
-        await set_appeals(group_info.group_id, cached_appeals)
+    await set_appeals(group_info.group_id, cached_appeals)
 
     return notifications
 
@@ -187,22 +186,22 @@ async def handle_appeal(
     Returns:
         bool: 处理是否成功
     """
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        user_info = await client.get_user_info(user_id)
-        result = await client.handle_unblock_appeals(group_info.fid, appeal_ids=[appeal_id], refuse=refuse)
-        if result:
-            action = "拒绝" if refuse else "通过"
-            await add_associated_data(
-                user_info,
-                group_info,
-                text_data=[
-                    TextDataModel(
-                        uploader_id=uploader_id,
-                        fid=group_info.fid,
-                        text=f"[自动添加]{action}申诉，理由：{reason}",
-                    )
-                ],
-            )
-            await del_appeal_id(appeal_id)
-            return True
-        return False
+    client = await ClientCache.get_bawu_client(group_info.group_id)
+    user_info = await client.get_user_info(user_id)
+    result = await client.handle_unblock_appeals(group_info.fid, appeal_ids=[appeal_id], refuse=refuse)
+    if result:
+        action = "拒绝" if refuse else "通过"
+        await add_associated_data(
+            user_info,
+            group_info,
+            text_data=[
+                TextDataModel(
+                    uploader_id=uploader_id,
+                    fid=group_info.fid,
+                    text=f"[自动添加]{action}申诉，理由：{reason}",
+                )
+            ],
+        )
+        await del_appeal_id(appeal_id)
+        return True
+    return False

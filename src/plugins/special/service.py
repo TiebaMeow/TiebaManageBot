@@ -10,8 +10,7 @@ if TYPE_CHECKING:
     from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
     from aiotieba.typing import UserInfo
     from nonebot.adapters.onebot.v11 import Message
-
-    from src.common import Client
+    from tiebameow.client import Client
 
 
 async def del_posts_from_user_posts(client: Client, fid: int, user_id: int) -> tuple[int, int]:
