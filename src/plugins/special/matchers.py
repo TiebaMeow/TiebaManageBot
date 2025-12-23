@@ -8,8 +8,7 @@ from nonebot.typing import T_State
 from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
 from logger import log
-from src.common import Client
-from src.common.cache import tieba_name
+from src.common.cache import ClientCache, get_tieba_name
 from src.db.crud import associated, autoban, group, image
 from src.db.models import GroupInfo, ImgDataModel, TextDataModel
 from src.utils import (
@@ -56,40 +55,39 @@ async def clear_posts_handle(
     tieba_uids = [await handle_tieba_uid(tieba_id) for tieba_id in tieba_uid_strs.result]
     if 0 in tieba_uids:
         await clear_posts_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
-        user_ids = [user_info.user_id for user_info in user_infos]
-        nicknames = [user_info.nick_name for user_info in user_infos]
-        if mode.result == "方式1":
-            confirm = await clear_posts_cmd.prompt(
-                f"即将使用方式1（遍历用户发贴历史）清理用户 {'，'.join(nicknames)} 在本吧的所有发言。\n"
-                "确认请回复“确认”，取消请回复任意内容。"
+
+    client = await ClientCache.get_bawu_client(group_info.group_id)
+    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    user_ids = [user_info.user_id for user_info in user_infos]
+    nicknames = [user_info.nick_name for user_info in user_infos]
+    if mode.result == "方式1":
+        confirm = await clear_posts_cmd.prompt(
+            f"即将使用方式1（遍历用户发贴历史）清理用户 {'，'.join(nicknames)} 在本吧的所有发言。\n"
+            "确认请回复“确认”，取消请回复任意内容。"
+        )
+        if not confirm or confirm.extract_plain_text() != "确认":
+            await clear_posts_cmd.finish("操作已取消。")
+        await clear_posts_cmd.send("已创建清理任务。")
+        for user_id in user_ids:
+            if user_id == (await client.get_self_info()).user_id:
+                break
+            posts_deleted, threads_deleted = await service.del_posts_from_user_posts(client, group_info.fid, user_id)
+            user_info = await client.get_user_info(user_id)
+            await associated.add_associated_data(
+                user_info,
+                group_info,
+                text_data=[
+                    TextDataModel(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]清空发言（方式1）")
+                ],
             )
-            if not confirm or confirm.extract_plain_text() != "确认":
-                await clear_posts_cmd.finish("操作已取消。")
-            await clear_posts_cmd.send("已创建清理任务。")
-            for user_id in user_ids:
-                if user_id == (await client.get_self_info()).user_id:
-                    break
-                posts_deleted, threads_deleted = await service.del_posts_from_user_posts(
-                    client, group_info.fid, user_id
-                )
-                user_info = await client.get_user_info(user_id)
-                await associated.add_associated_data(
-                    user_info,
-                    group_info,
-                    text_data=[
-                        TextDataModel(uploader_id=event.user_id, fid=group_info.fid, text="[自动添加]清空发言（方式1）")
-                    ],
-                )
-                await clear_posts_cmd.send(
-                    f"用户 {user_info.nick_name}({user_info.tieba_uid}) 在本吧的发言清理完成，"
-                    f"共删除 {posts_deleted} 条回复和 {threads_deleted} 个主题贴。"
-                )
-        elif mode.result == "方式2":
-            await clear_posts_cmd.finish("方式2暂未实现。")
-        else:
-            await clear_posts_cmd.finish("参数错误，请检查输入。")
+            await clear_posts_cmd.send(
+                f"用户 {user_info.nick_name}({user_info.tieba_uid}) 在本吧的发言清理完成，"
+                f"共删除 {posts_deleted} 条回复和 {threads_deleted} 个主题贴。"
+            )
+    elif mode.result == "方式2":
+        await clear_posts_cmd.finish("方式2暂未实现。")
+    else:
+        await clear_posts_cmd.finish("参数错误，请检查输入。")
 
 
 add_autoban_alc = Alconna(
@@ -121,8 +119,8 @@ async def add_autoban_handle(
     group_info = await group.get_group(event.group_id)
     state["group_info"] = group_info
 
-    async with Client(try_ws=True) as client:
-        user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    client = await ClientCache.get_client()
+    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
 
     state["user_infos"] = user_infos
     state["text_reasons"] = []
@@ -209,33 +207,29 @@ async def add_autoban_input(state: T_State, input_: GroupMessageEvent = Received
     if msg.extract_plain_text() == "确认":
         state["current_user"] = None
 
-        async with Client(group_info.slave_bduss, try_ws=True) as client:
-            db_success, tieba_success = await service.add_ban_and_block(
-                client, group_info.fid, group_info.group_id, current_user, input_.user_id, text_reasons, img_reasons
-            )
+        client = await ClientCache.get_bawu_client(group_info.group_id)
+        db_success, tieba_success = await service.add_ban_and_block(
+            client, group_info.fid, group_info.group_id, current_user, input_.user_id, text_reasons, img_reasons
+        )
 
-            if not db_success:
+        if not db_success:
+            await add_autoban_cmd.send(f"用户 {current_user.nick_name}({current_user.tieba_uid}) 添加至循封列表失败。")
+        else:
+            await add_autoban_cmd.send(f"已将用户 {current_user.nick_name}({current_user.tieba_uid}) 添加至循封列表。")
+            await associated.add_associated_data(
+                current_user,
+                group_info,
+                text_data=[TextDataModel(uploader_id=input_.user_id, fid=group_info.fid, text="[自动添加]循封")],
+            )
+            if not tieba_success:
+                log.warning(
+                    f"Failed to block user {current_user.nick_name}({current_user.tieba_uid}) in "
+                    f"{await get_tieba_name(group_info.fid)}"
+                )
                 await add_autoban_cmd.send(
-                    f"用户 {current_user.nick_name}({current_user.tieba_uid}) 添加至循封列表失败。"
+                    f"用户 {current_user.nick_name}({current_user.tieba_uid}) "
+                    "数据库操作成功，贴吧封禁失败，请考虑手动添加封禁。"
                 )
-            else:
-                await add_autoban_cmd.send(
-                    f"已将用户 {current_user.nick_name}({current_user.tieba_uid}) 添加至循封列表。"
-                )
-                await associated.add_associated_data(
-                    current_user,
-                    group_info,
-                    text_data=[TextDataModel(uploader_id=input_.user_id, fid=group_info.fid, text="[自动添加]循封")],
-                )
-                if not tieba_success:
-                    log.warning(
-                        f"Failed to block user {current_user.nick_name}({current_user.tieba_uid}) in "
-                        f"{await tieba_name.get_tieba_name(group_info.fid)}"
-                    )
-                    await add_autoban_cmd.send(
-                        f"用户 {current_user.nick_name}({current_user.tieba_uid}) "
-                        "数据库操作成功，贴吧封禁失败，请考虑手动添加封禁。"
-                    )
 
         if pending_imgs:
             new_img_reasons, failed_count = await service.process_ban_images(
@@ -308,9 +302,9 @@ async def remove_autoban_handle(
     if 0 in tieba_uids:
         await remove_autoban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
-        success, failure = await service.remove_autoban_users(client, group_info, event.user_id, user_infos)
+    client = await ClientCache.get_bawu_client(group_info.group_id)
+    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    success, failure = await service.remove_autoban_users(client, group_info, event.user_id, user_infos)
 
     await remove_autoban_cmd.send(f"处理完成，成功解除循封 {len(success)} 人，失败 {len(failure)} 人。")
     if failure:
@@ -340,20 +334,23 @@ delete_ban_reason_cmd = on_alconna(
 @delete_ban_reason_cmd.handle()
 async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_uid_str: Match[str]):
     group_info = await group.get_group(event.group_id)
-    assert group_info is not None  # for pylance
     tieba_uid = await handle_tieba_uid(tieba_uid_str.result)
     if tieba_uid is None:
         await delete_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with Client(try_ws=True) as client:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+
+    client = await ClientCache.get_client()
+    user_info = await client.tieba_uid2user_info(tieba_uid)
+
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
         await delete_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")
+
     assert ban_reason is not None  # for pylance
     state["group_info"] = group_info
     state["user_info"] = user_info
     if not ban_reason.text_reason and not ban_reason.img_reason:
         await delete_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因为空。")
+
     state["ban_reason"] = ban_reason
     text_reasons = list(enumerate(ban_reason.text_reason, start=1))
     state["text_reasons"] = list(text_reasons)
@@ -362,6 +359,7 @@ async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tie
     img_reasons = list(enumerate(ban_reason.img_reason, start=img_enum_start))
     state["img_reasons"] = list(img_reasons)
     img_reasons_list = []
+
     for i, img in img_reasons:
         img_data = await image.get_image_data(img.image_id)
         if img_data is None:
@@ -371,6 +369,7 @@ async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tie
     await delete_ban_reason_cmd.send(
         f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因：\n" + "\n".join(text_reasons_list)
     )
+
     if img_reasons_list:
         img_msg = MessageSegment.text("\n").join(img_reasons_list)
         await delete_ban_reason_cmd.send(img_msg)
@@ -432,15 +431,16 @@ add_ban_reason_cmd = on_alconna(
 @add_ban_reason_cmd.handle()
 async def add_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_uid_str: Match[str]):
     group_info = await group.get_group(event.group_id)
-    assert group_info is not None  # for pylance
     tieba_uid = await handle_tieba_uid(tieba_uid_str.result)
     if tieba_uid is None:
         await add_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with Client(try_ws=True) as client:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+
+    client = await ClientCache.get_client()
+    user_info = await client.tieba_uid2user_info(tieba_uid)
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
         await add_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")
+
     assert ban_reason is not None  # for pylance
     state["ban_reason"] = ban_reason
     state["group_info"] = group_info
@@ -520,15 +520,16 @@ get_ban_reason_cmd = on_alconna(
 @get_ban_reason_cmd.handle()
 async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[str]):
     group_info = await group.get_group(event.group_id)
-    assert group_info is not None  # for pylance
     tieba_uid = await handle_tieba_uid(tieba_uid_str.result)
     if tieba_uid is None:
         await get_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
-    async with Client(try_ws=True) as client:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+
+    client = await ClientCache.get_client()
+    user_info = await client.tieba_uid2user_info(tieba_uid)
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
         await get_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")
+
     assert ban_reason is not None  # for pylance
     if is_banned == "unbanned":
         unban_time_str = ban_reason.unban_time.strftime("%Y-%m-%d %H:%M:%S") if ban_reason.unban_time else "未知时间"

@@ -8,7 +8,7 @@ from src.common.cache import get_tieba_name
 from src.utils import text_to_image
 
 if TYPE_CHECKING:
-    from src.common import Client
+    from tiebameow.client import Client
 
 
 class Producer:

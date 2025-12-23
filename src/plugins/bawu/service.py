@@ -10,7 +10,7 @@ from src.db.crud import add_associated_data
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from src.common import Client
+    from tiebameow.client import Client
 
 
 async def delete_threads(

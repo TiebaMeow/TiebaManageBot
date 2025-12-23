@@ -1,6 +1,7 @@
 from typing import Literal
 
-from src.common.http_client import HTTPXClient
+from tiebameow.client import HTTPXClient
+
 from src.db.models import Image, ImgDataModel
 from src.db.session import get_session
 

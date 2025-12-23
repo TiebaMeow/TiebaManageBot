@@ -2,7 +2,7 @@ from pathlib import Path
 
 from cashews import Cache
 
-CACHE_DIR = Path.cwd() / "data" / "cache"
+CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 appeal_cache = Cache()

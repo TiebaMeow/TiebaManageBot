@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 
 import httpx
 
-from src.common import Client, get_user_posts_cached, get_user_threads_cached
+from src.common import get_user_posts_cached, get_user_threads_cached
 from src.common.cache import get_tieba_name
 from src.db.crud import set_associated_data
 from src.utils import (
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
     from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
+    from tiebameow.client import Client
 
     from src.db import GroupInfo, ImgDataModel, TextDataModel
 

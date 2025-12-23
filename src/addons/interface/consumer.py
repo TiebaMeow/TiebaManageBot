@@ -4,8 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import redis.asyncio as redis
-
-from src.utils.deserialization import deserialize
+from tiebameow.serializer import deserialize
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable

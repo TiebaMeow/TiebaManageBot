@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from src.common import Client
+from src.common.cache import ClientCache
 
 if TYPE_CHECKING:
     from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
     from nonebot.adapters import Bot
+    from tiebameow.client import Client
 
 
 async def get_user_name(bot: Bot, group_id: int, user_id: int) -> str | None:
@@ -29,8 +30,8 @@ async def get_tieba_user_info(tieba_uid: int, client: Client) -> UserInfo_TUid:
 async def handle_tieba_uid(tieba_uid_str: str, client: Client | None = None) -> int:
     if tieba_uid_str.startswith("tb."):
         if client is None:
-            async with Client() as client:
-                user_info = await client.get_user_info(tieba_uid_str)
+            client = await ClientCache.get_client()
+            user_info = await client.get_user_info(tieba_uid_str)
         else:
             user_info = await client.get_user_info(tieba_uid_str)
         if user_info:
@@ -47,8 +48,8 @@ async def handle_tieba_uid(tieba_uid_str: str, client: Client | None = None) -> 
 
 
 async def handle_tieba_uids(tieba_uid_strs: tuple[str, ...]) -> list[int]:
-    async with Client() as client:
-        results = [await handle_tieba_uid(uid_str, client) for uid_str in tieba_uid_strs]
+    client = await ClientCache.get_client()
+    results = [await handle_tieba_uid(uid_str, client) for uid_str in tieba_uid_strs]
     return results
 
 

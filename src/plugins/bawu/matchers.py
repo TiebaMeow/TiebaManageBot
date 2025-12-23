@@ -5,7 +5,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
-from src.common import Client
+from src.common.cache import ClientCache
 from src.db.crud import get_group
 from src.utils import (
     handle_thread_url,
@@ -54,8 +54,8 @@ async def del_thread_handle(
     if 0 in tids:
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        succeeded, failed = await service.delete_threads(client, group_info, tids, event.user_id)
+    client = await ClientCache.get_bawu_client(event.group_id)
+    succeeded, failed = await service.delete_threads(client, group_info, tids, event.user_id)
 
     succeeded_str = f"\n成功删除{len(succeeded)}个贴子。" if succeeded else ""
     failed_str = f"\n以下贴子删除失败：{', '.join('tid=' + str(tid) for tid in failed)}" if failed else ""
@@ -93,11 +93,8 @@ async def del_post_handle(
     if tid == 0:
         await del_post_cmd.finish("参数中包含无法解析的链接，请检查输入。")
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        succeeded, failed, error = await service.delete_posts(
-            client, group_info, tid, list(floors.result), event.user_id
-        )
-
+    client = await ClientCache.get_bawu_client(event.group_id)
+    succeeded, failed, error = await service.delete_posts(client, group_info, tid, list(floors.result), event.user_id)
     if error:
         await del_post_cmd.finish(error)
 
@@ -136,8 +133,8 @@ async def blacklist_handle(
     if 0 in uids:
         await blacklist_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
-    async with Client(group_info.master_bduss, try_ws=True) as client:
-        succeeded, failed = await service.blacklist_users(client, group_info, uids, event.user_id, is_blacklist)
+    client = await ClientCache.get_master_client(event.group_id)
+    succeeded, failed = await service.blacklist_users(client, group_info, uids, event.user_id, is_blacklist)
 
     succeeded_str = f"\n成功{cmd}{len(succeeded)}个用户。" if succeeded else ""
     failed_str = f"\n以下用户{cmd}失败：{', '.join('tieba_uid=' + str(uid) for uid in failed)}" if failed else ""
@@ -176,8 +173,8 @@ async def ban_handle(
     if 0 in uids:
         await ban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        succeeded, failed = await service.ban_users(client, group_info, uids, days_int, event.user_id)
+    client = await ClientCache.get_bawu_client(event.group_id)
+    succeeded, failed = await service.ban_users(client, group_info, uids, days_int, event.user_id)
 
     succeeded_str = f"\n成功为{len(succeeded)}名用户添加{days_int}天封禁。" if succeeded else ""
     failed_str = f"\n以下用户封禁失败：{', '.join('tieba_uid=' + str(uid) for uid in failed)}" if failed else ""
@@ -210,8 +207,8 @@ async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]
     if 0 in uids:
         await unban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
-    async with Client(group_info.slave_bduss, try_ws=True) as client:
-        succeeded, failed = await service.unban_users(client, group_info, uids, event.user_id)
+    client = await ClientCache.get_bawu_client(event.group_id)
+    succeeded, failed = await service.unban_users(client, group_info, uids, event.user_id)
 
     succeeded_str = f"\n成功为{len(succeeded)}个用户解除封禁。" if succeeded else ""
     failed_str = f"\n以下用户解封失败：{', '.join('tieba_uid=' + str(uid) for uid in failed)}" if failed else ""
@@ -245,8 +242,8 @@ async def good_handle(event: GroupMessageEvent, thread_url: Match[str], args: Ar
     if tid is None:
         await good_cmd.finish("无法解析链接，请检查输入。")
 
-    async with Client(group_info.master_bduss, try_ws=True) as client:
-        success, msg = await service.thread_action(client, group_info, tid, cmd)
+    client = await ClientCache.get_master_client(event.group_id)
+    success, msg = await service.thread_action(client, group_info, tid, cmd)
 
     await good_cmd.finish(msg)
 
@@ -289,7 +286,7 @@ async def move_handle(
     if tid is None:
         await move_cmd.finish("无法解析链接，请检查输入。")
 
-    async with Client(group_info.master_bduss, try_ws=True) as client:
-        success, msg = await service.move_thread(client, group_info, tid, tab_name.result)
+    client = await ClientCache.get_master_client(event.group_id)
+    success, msg = await service.move_thread(client, group_info, tid, tab_name.result)
 
     await move_cmd.finish(msg)

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tiebameow.client import Client
+
 from logger import log
-from src.common import Client
+from src.common.cache import ClientCache
 from src.db import GroupInfo
 from src.db.crud import add_group, delete_group, get_group, update_group
 from src.utils import get_user_name
@@ -30,8 +32,8 @@ async def init_group(group_id: int, user_id: int, tieba_name: str) -> str:
     except KeyError:
         pass
 
-    async with Client() as client:
-        fid = await client.get_fid(tieba_name)
+    client = await ClientCache.get_client()
+    fid = await client.get_fid(tieba_name)
 
     if fid == 0:
         return f"贴吧 {tieba_name}吧 不存在，请检查拼写"

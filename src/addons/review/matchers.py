@@ -4,7 +4,7 @@ from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Query, on_alconna
 
 from src.addons.review import service
-from src.common import Client
+from src.common import ClientCache
 from src.db.crud import group
 from src.utils import (
     handle_tieba_uids,
@@ -110,13 +110,13 @@ async def add_user_handle(
     group_info = await group.get_group(event.group_id)
 
     raw_users = {}
-    async with Client(try_ws=True) as client:
-        for tieba_uid in tieba_uids:
-            user_info = await client.tieba_uid2user_info(tieba_uid)
-            if user_info.user_id == 0:
-                await add_user_cmd.send(f"暂时无法获取贴吧ID为 {tieba_uid} 的用户信息，请重试。")
-                continue
-            raw_users[str(user_info.user_id)] = f"{user_info.nick_name}({user_info.tieba_uid})"
+    client = await ClientCache.get_client()
+    for tieba_uid in tieba_uids:
+        user_info = await client.tieba_uid2user_info(tieba_uid)
+        if user_info.user_id == 0:
+            await add_user_cmd.send(f"暂时无法获取贴吧ID为 {tieba_uid} 的用户信息，请重试。")
+            continue
+        raw_users[str(user_info.user_id)] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))
 

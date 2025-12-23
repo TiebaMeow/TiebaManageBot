@@ -21,7 +21,7 @@ from nonebot_plugin_alconna import (
     on_alconna,
 )
 
-from src.common import Client
+from src.common.cache import ClientCache
 from src.db import ImgDataModel, TextDataModel
 from src.db.crud import (
     add_associated_data,
@@ -75,11 +75,9 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     if not tieba_id:
         await checkout_cmd.finish("贴吧ID格式错误，请检查输入。")
     await checkout_cmd.send("正在查询...")
-    group_info = await get_group(event.group_id)
-    async with Client(group_info.slave_bduss) as client:
-        base_content, image_content = await service.generate_checkout_msg(
-            client, tieba_id, plugin_config.checkout_tieba
-        )
+
+    client = await ClientCache.get_bawu_client(event.group_id)
+    base_content, image_content = await service.generate_checkout_msg(client, tieba_id, plugin_config.checkout_tieba)
 
     await checkout_cmd.finish(message=MessageSegment.text(base_content) + MessageSegment.image(image_content))
 
@@ -141,23 +139,25 @@ async def check_posts_handle(
         await check_posts_cmd.finish("贴吧ID格式错误，请检查输入。")
     group_info = await get_group(event.group_id)
 
-    async with Client() as client:
-        fids = []
-        if tieba_names.result:
-            for tieba_name in tieba_names.result:
-                if tieba_name == "本吧":
-                    fids.append(group_info.fid)
-                else:
-                    tieba_name = tieba_name.removesuffix("吧")
-                    if fid := await client.get_fid(tieba_name):
-                        fids.append(fid)
-            if not fids:
-                await check_posts_cmd.finish("未查询到指定贴吧，请检查输入。")
-        await check_posts_cmd.send("正在查询...")
-        user_info = await client.tieba_uid2user_info(tieba_id)
-        consumer_task = asyncio.create_task(consumer(Producer(client, user_info.user_id, fids), check_posts_cmd))
-        await consumer_task
-        await check_posts_cmd.finish()
+    client = await ClientCache.get_client()
+    fids = []
+    if tieba_names.result:
+        for tieba_name in tieba_names.result:
+            if tieba_name == "本吧":
+                fids.append(group_info.fid)
+            else:
+                tieba_name = tieba_name.removesuffix("吧")
+                if fid := await client.get_fid(tieba_name):
+                    fids.append(fid)
+        if not fids:
+            await check_posts_cmd.finish("未查询到指定贴吧，请检查输入。")
+    await check_posts_cmd.send("正在查询...")
+
+    user_info = await client.tieba_uid2user_info(tieba_id)
+    consumer_task = asyncio.create_task(consumer(Producer(client, user_info.user_id, fids), check_posts_cmd))
+    await consumer_task
+
+    await check_posts_cmd.finish()
 
 
 add_associate_data_alc = Alconna(
@@ -183,8 +183,9 @@ async def add_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
         await add_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
-    async with Client(try_ws=True) as client:
-        user_info = await client.tieba_uid2user_info(tieba_id)
+
+    client = await ClientCache.get_client()
+    user_info = await client.tieba_uid2user_info(tieba_id)
     group_info = await get_group(event.group_id)
     state["user_info"] = user_info
     state["group_info"] = group_info
@@ -273,8 +274,8 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
     if not tieba_id:
         await get_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
 
-    async with Client(try_ws=True) as client:
-        user_info = await client.tieba_uid2user_info(tieba_id)
+    client = await ClientCache.get_client()
+    user_info = await client.tieba_uid2user_info(tieba_id)
     state["user_info"] = user_info
 
     associated_data = await get_associated_data(user_info.user_id, group_info.fid)
@@ -366,18 +367,18 @@ async def get_last_replier_handle(event: GroupMessageEvent, thread_url: Match[st
         await get_last_replier_cmd.finish("无法解析链接，请检查输入。")
     group_info = await get_group(event.group_id)
 
-    async with Client(try_ws=True) as client:
-        user_info_dict, msg = await service.get_last_replier(client, group_info.fname, thread_id)
-        if user_info_dict:
-            await get_last_replier_cmd.send(msg)
-            checkout_msg, checkout_img = await service.generate_checkout_msg(
-                client, user_info_dict["tieba_uid"], plugin_config.checkout_tieba
-            )
-            await get_last_replier_cmd.finish(
-                message=MessageSegment.text(checkout_msg) + MessageSegment.image(checkout_img)
-            )
-        else:
-            await get_last_replier_cmd.finish(msg)
+    client = await ClientCache.get_client()
+    user_info_dict, msg = await service.get_last_replier(client, group_info.fname, thread_id)
+    if user_info_dict:
+        await get_last_replier_cmd.send(msg)
+        checkout_msg, checkout_img = await service.generate_checkout_msg(
+            client, user_info_dict["tieba_uid"], plugin_config.checkout_tieba
+        )
+        await get_last_replier_cmd.finish(
+            message=MessageSegment.text(checkout_msg) + MessageSegment.image(checkout_img)
+        )
+    else:
+        await get_last_replier_cmd.finish(msg)
 
 
 check_ban_alc = Alconna(
@@ -407,8 +408,8 @@ async def check_ban_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     await check_ban_cmd.send("正在查询...")
     group_info = await get_group(event.group_id)
 
-    async with Client(group_info.slave_bduss, group_info.slave_stoken, try_ws=True) as client:
-        msg, logs = await service.get_ban_logs(client, group_info.fid, tieba_id)
+    client = await ClientCache.get_stoken_client(event.group_id)
+    msg, logs = await service.get_ban_logs(client, group_info.fid, tieba_id)
 
     if msg:
         await check_ban_cmd.finish(msg)
@@ -442,8 +443,8 @@ async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]
     await check_delete_cmd.send("正在查询...")
     group_info = await get_group(event.group_id)
 
-    async with Client(group_info.slave_bduss, group_info.slave_stoken, try_ws=True) as client:
-        msg, logs = await service.get_delete_logs(client, group_info.fid, tieba_id)
+    client = await ClientCache.get_stoken_client(event.group_id)
+    msg, logs = await service.get_delete_logs(client, group_info.fid, tieba_id)
 
     if msg:
         await check_delete_cmd.finish(msg)
@@ -469,16 +470,16 @@ tieba_url_message = on_message(
 async def tieba_url_message_handle(event: GroupMessageEvent):
     tid, pid = handle_post_url(event.raw_message)
     if tid and pid:
-        async with Client(try_ws=True) as client:
-            img_bytes = await service.get_thread_preview(client, tid, pid)
-            if img_bytes:
-                await tieba_url_message.finish(MessageSegment.image(img_bytes))
+        client = await ClientCache.get_client()
+        img_bytes = await service.get_thread_preview(client, tid, pid)
+        if img_bytes:
+            await tieba_url_message.finish(MessageSegment.image(img_bytes))
 
     # 仅主题贴
     tid = handle_thread_url(event.raw_message)
     if not tid:
         return
-    async with Client(try_ws=True) as client:
-        img_bytes = await service.get_thread_preview(client, tid)
-        if img_bytes:
-            await tieba_url_message.finish(MessageSegment.image(img_bytes))
+    client = await ClientCache.get_client()
+    img_bytes = await service.get_thread_preview(client, tid)
+    if img_bytes:
+        await tieba_url_message.finish(MessageSegment.image(img_bytes))
