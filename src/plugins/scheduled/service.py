@@ -37,8 +37,12 @@ async def run_autoban() -> None:
         log.info(f"Ready to autoban in {group_info.fname}")
         client = await ClientCache.get_bawu_client(group_info.group_id)
         async for user_id in get_autoban_lists(forum.fid):
-            result = await client.block(group_info.fid, user_id, day=10)
-            if not result:
+            try:
+                result = await client.block(group_info.fid, user_id, day=10)
+                if not result:
+                    failed.append(user_id)
+            except Exception as e:
+                log.error(f"Error autobanning user {user_id} in {group_info.fname}: {e}")
                 failed.append(user_id)
         await update_autoban(group_info.fid, group_info.group_id)
         if failed:
