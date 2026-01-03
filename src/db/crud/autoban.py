@@ -121,11 +121,11 @@ async def get_autoban() -> list[BanStatus]:
         return list(ban_statuses.scalars().all())
 
 
-async def get_autoban_lists(fid: int) -> AsyncGenerator[int, None]:
+async def get_autoban_lists(fid: int) -> AsyncGenerator[str, None]:
     async with get_session() as session:
-        ban_lists = await session.stream(select(BanList.user_id).where(BanList.enable.is_(True), BanList.fid == fid))
-        async for ban_list in ban_lists.scalars():
-            yield ban_list
+        ban_lists = await session.stream(select(BanList.portrait).where(BanList.enable.is_(True), BanList.fid == fid))
+        async for portrait in ban_lists.scalars():
+            yield portrait
 
 
 async def update_autoban(fid: int, group_id: int) -> bool:

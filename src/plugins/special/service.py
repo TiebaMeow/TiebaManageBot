@@ -98,7 +98,7 @@ async def add_ban_and_block(
 
     tieba_success = False
     if db_success:
-        tieba_success = await client.block(fid, user.user_id, day=10)
+        tieba_success = await client.block(fid, user.portrait, day=10)
 
     return db_success, bool(tieba_success)
 

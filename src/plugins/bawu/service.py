@@ -171,7 +171,7 @@ async def ban_users(
     failed = []
     for tieba_uid in uids:
         user_info = await client.tieba_uid2user_info(tieba_uid)
-        if await client.block(group_info.fid, user_info.user_id, day=days):
+        if await client.block(group_info.fid, user_info.portrait, day=days):
             succeeded.append(tieba_uid)
             await add_associated_data(
                 user_info,
