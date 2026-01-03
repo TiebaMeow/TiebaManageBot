@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from src.db.models import AssociatedData, GroupInfo, ImgDataModel, TextDataModel
+from src.db.models import AssociatedList, GroupInfo, ImgDataModel, TextDataModel
 from src.db.session import get_session
 
 if TYPE_CHECKING:
@@ -17,15 +17,15 @@ async def add_associated_data(
     img_data: list[ImgDataModel] | None = None,
 ) -> bool:
     async with get_session() as session:
-        stmt = select(AssociatedData).where(
-            AssociatedData.user_id == user_info.user_id,
-            AssociatedData.fid == group_info.fid,
+        stmt = select(AssociatedList).where(
+            AssociatedList.user_id == user_info.user_id,
+            AssociatedList.fid == group_info.fid,
         )
         result = await session.execute(stmt)
         associated_data = result.scalar_one_or_none()
 
         if not associated_data:
-            associated_data = AssociatedData(
+            associated_data = AssociatedList(
                 user_id=user_info.user_id,
                 fid=group_info.fid,
                 tieba_uid=user_info.tieba_uid,
@@ -54,18 +54,18 @@ async def add_associated_data(
             return False
 
 
-async def get_associated_data(user_id: int, fid: int) -> AssociatedData | None:
+async def get_associated_data(user_id: int, fid: int) -> AssociatedList | None:
     async with get_session() as session:
         associated_data = await session.execute(
-            select(AssociatedData).where(AssociatedData.user_id == user_id, AssociatedData.fid == fid)
+            select(AssociatedList).where(AssociatedList.user_id == user_id, AssociatedList.fid == fid)
         )
         return associated_data.scalar_one_or_none()
 
 
-async def get_public_associated_data(user_id: int) -> list[AssociatedData]:
+async def get_public_associated_data(user_id: int) -> list[AssociatedList]:
     async with get_session() as session:
         associated_data = await session.execute(
-            select(AssociatedData).where(AssociatedData.user_id == user_id, AssociatedData.is_public.is_(True))
+            select(AssociatedList).where(AssociatedList.user_id == user_id, AssociatedList.is_public.is_(True))
         )
         return list(associated_data.scalars().all())
 
@@ -75,7 +75,7 @@ async def set_associated_data(
 ) -> bool:
     async with get_session() as session:
         associated_data = await session.execute(
-            select(AssociatedData).where(AssociatedData.user_id == user_id, AssociatedData.fid == fid)
+            select(AssociatedList).where(AssociatedList.user_id == user_id, AssociatedList.fid == fid)
         )
         associated_data = associated_data.scalar_one_or_none()
         if associated_data:

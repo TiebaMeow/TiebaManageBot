@@ -89,6 +89,7 @@ async def add_ban_and_block(
     ban_reason = BanList(
         fid=fid,
         user_id=user.user_id,
+        portrait=user.portrait,
         operator_id=operator_id,
         text_reason=text_reasons,
         img_reason=img_reasons,

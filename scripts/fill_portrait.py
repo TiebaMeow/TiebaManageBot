@@ -12,7 +12,7 @@ from tiebameow.client import Client
 project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
 
-from src.db import models_v2 as models  # noqa: E402
+from src.db import models  # noqa: E402
 
 DB_URL = "postgresql+asyncpg://admin:123456@localhost/tieba_test"
 

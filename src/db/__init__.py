@@ -1,6 +1,6 @@
 from .crud import associated, autoban, group, image
 from .models import (
-    AssociatedData,
+    AssociatedList,
     BanList,
     BanStatus,
     Base,
@@ -17,7 +17,7 @@ __all__ = [
     "autoban",
     "group",
     "image",
-    "AssociatedData",
+    "AssociatedList",
     "BanList",
     "BanStatus",
     "Base",

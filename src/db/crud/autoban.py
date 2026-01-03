@@ -20,6 +20,7 @@ async def add_ban(fid: int, group_id: int, ban_list: BanList) -> bool:
         stmt = insert(BanList).values(
             fid=ban_list.fid,
             user_id=ban_list.user_id,
+            portrait=ban_list.portrait,
             ban_time=now_with_tz(),
             operator_id=ban_list.operator_id,
             enable=True,
