@@ -20,6 +20,7 @@ class Producer:
         self.fids = set(fids) if fids else None
         self.client = client
         self.current_page = 1
+        self.page_show = 1
         self.batch_size = 10 if fids else 4
         self.producer_task = asyncio.create_task(self._producer())
 
@@ -66,7 +67,6 @@ class Producer:
         """生产者主循环"""
         try:
             while True:
-                page_show = 1
                 if len(self.buffer) < 20:
                     has_empty = await self._fetch_batch()
                     self.current_page += self.batch_size
@@ -75,15 +75,15 @@ class Producer:
                         while self.buffer:
                             chunk = self.buffer[:20]
                             self.buffer = self.buffer[20:]
-                            await self.queue.put(await self._generate_msg(chunk, page_show))
-                            page_show += 1
+                            await self.queue.put(await self._generate_msg(chunk, self.page_show))
+                            self.page_show += 1
                         await self.queue.put(None)
                         return
                 else:
                     chunk = self.buffer[:20]
                     self.buffer = self.buffer[20:]
-                    await self.queue.put(await self._generate_msg(chunk, page_show))
-                    page_show += 1
+                    await self.queue.put(await self._generate_msg(chunk, self.page_show))
+                    self.page_show += 1
 
         except asyncio.CancelledError:
             pass
