@@ -154,7 +154,7 @@ async def check_posts_handle(
     await check_posts_cmd.send("正在查询...")
 
     user_info = await client.tieba_uid2user_info(tieba_id)
-    consumer_task = asyncio.create_task(consumer(Producer(client, user_info.user_id, fids), check_posts_cmd))
+    consumer_task = asyncio.create_task(consumer(Producer(client, user_info, fids), check_posts_cmd))
     await consumer_task
 
     await check_posts_cmd.finish()

@@ -9,7 +9,7 @@ from .helpers import (
     handle_tieba_uid,
     handle_tieba_uids,
 )
-from .renderer import render_post_card, render_thread_card, text_to_image
+from .renderer import render_thread, text_to_image
 from .rules import (
     is_admin,
     is_master,
@@ -35,8 +35,7 @@ __all__ = [
     "is_admin",
     "is_master",
     "is_moderator",
-    "render_post_card",
-    "render_thread_card",
+    "render_thread",
     "require_STOKEN",
     "require_bduss",
     "require_master_BDUSS",

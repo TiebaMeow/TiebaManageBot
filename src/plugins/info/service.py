@@ -12,8 +12,7 @@ from src.common import get_user_posts_cached, get_user_threads_cached
 from src.common.cache import get_tieba_name
 from src.db.crud import set_associated_data
 from src.utils import (
-    render_post_card,
-    render_thread_card,
+    render_thread,
     text_to_image,
 )
 
@@ -112,7 +111,8 @@ async def generate_checkout_msg(client: Client, tieba_id: int, checkout_tieba_co
 
     base_content = f"基本信息：\n{user_info_str}"
     image_content = await text_to_image(
-        f"{user_info.tieba_uid}关注的贴吧：\n{user_tieba_str}\n\n近期发贴的吧：\n{user_posts_count_str}"
+        f"用户 {user_info.show_name}({user_info.tieba_uid}) 关注的贴吧：\n{user_tieba_str}\n\n"
+        f"近期发贴的吧：\n{user_posts_count_str}"
     )
 
     return base_content, image_content
@@ -275,10 +275,9 @@ async def get_thread_preview(client: Client, tid: int, pid: int = 0) -> bytes | 
         post_info = await client.get_comments(tid, pid)
         if thread_info.err or post_info.err:
             return None
-        return await render_post_card(
+        return await render_thread(
             thread_info.thread,
-            post_info.post,
-            post_info.objs[:3],
+            post_info.post,  # type: ignore
         )
     else:
         thread_info = await client.get_posts(tid, with_comments=True)
@@ -292,4 +291,4 @@ async def get_thread_preview(client: Client, tid: int, pid: int = 0) -> bytes | 
             del posts[0]
             if thread.reply_num > 0:
                 thread.reply_num -= 1
-        return await render_thread_card(thread, posts[:3])
+        return await render_thread(thread, posts[:3])

@@ -8,14 +8,15 @@ from src.common.cache import get_tieba_name
 from src.utils import text_to_image
 
 if TYPE_CHECKING:
+    from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
     from tiebameow.client import Client
 
 
 class Producer:
-    def __init__(self, client: Client, user_id: int, fids: list[int] | None):
+    def __init__(self, client: Client, user_info: UserInfo_TUid, fids: list[int] | None):
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=4)
         self.buffer: list[dict[str, str]] = []
-        self.user_id = user_id
+        self.user_info = user_info
         self.fids = set(fids) if fids else None
         self.client = client
         self.current_page = 1
@@ -25,7 +26,7 @@ class Producer:
     async def _fetch_batch(self) -> bool:
         """获取单个批次的数据"""
         tasks = [
-            get_user_posts_cached(self.client, self.user_id, pn=page, rn=50)
+            get_user_posts_cached(self.client, self.user_info.user_id, pn=page, rn=50)
             for page in range(self.current_page, self.current_page + self.batch_size)
         ]
         results = await asyncio.gather(*tasks)
@@ -52,10 +53,14 @@ class Producer:
         self.buffer.extend(new_items)
         return has_empty
 
-    async def _generate_msg(self, posts: list[dict[str, str]]) -> bytes:
+    async def _generate_msg(self, posts: list[dict[str, str]], page: int) -> bytes:
         """生成消息"""
         posts_str = "\n".join([f"{post['tieba_name']}：\n{post['post_content']}" for post in posts])
-        return await text_to_image(posts_str)
+        return await text_to_image(
+            posts_str,
+            header=f"用户 {self.user_info.show_name}({self.user_info.tieba_uid}) 的回复历史",
+            footer=f"第 {page} 页",
+        )
 
     async def _producer(self):
         """生产者主循环"""
@@ -69,13 +74,13 @@ class Producer:
                         while self.buffer:
                             chunk = self.buffer[:20]
                             self.buffer = self.buffer[20:]
-                            await self.queue.put(await self._generate_msg(chunk))
+                            await self.queue.put(await self._generate_msg(chunk, self.current_page))
                         await self.queue.put(None)
                         return
                 else:
                     chunk = self.buffer[:20]
                     self.buffer = self.buffer[20:]
-                    await self.queue.put(await self._generate_msg(chunk))
+                    await self.queue.put(await self._generate_msg(chunk, self.current_page))
 
         except asyncio.CancelledError:
             pass
