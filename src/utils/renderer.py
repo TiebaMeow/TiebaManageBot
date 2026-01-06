@@ -78,7 +78,7 @@ async def render_thread(
 async def text_to_image(
     text: str,
     *,
-    wrap: bool = True,
+    wrap: bool = False,
     wrap_width: int = 48,
     header: str = "",
     footer: str = "",

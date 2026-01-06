@@ -58,7 +58,7 @@ class Producer:
         posts_str = "\n".join([f"{post['tieba_name']}：\n{post['post_content']}" for post in posts])
         return await text_to_image(
             posts_str,
-            header=f"用户 {self.user_info.show_name}({self.user_info.tieba_uid}) 的回复历史",
+            header=f"用户 {self.user_info.show_name}({self.user_info.tieba_uid}) 的历史发言",
             footer=f"第 {page} 页",
         )
 
@@ -66,6 +66,7 @@ class Producer:
         """生产者主循环"""
         try:
             while True:
+                page_show = 1
                 if len(self.buffer) < 20:
                     has_empty = await self._fetch_batch()
                     self.current_page += self.batch_size
@@ -74,13 +75,15 @@ class Producer:
                         while self.buffer:
                             chunk = self.buffer[:20]
                             self.buffer = self.buffer[20:]
-                            await self.queue.put(await self._generate_msg(chunk, self.current_page))
+                            await self.queue.put(await self._generate_msg(chunk, page_show))
+                            page_show += 1
                         await self.queue.put(None)
                         return
                 else:
                     chunk = self.buffer[:20]
                     self.buffer = self.buffer[20:]
-                    await self.queue.put(await self._generate_msg(chunk, self.current_page))
+                    await self.queue.put(await self._generate_msg(chunk, page_show))
+                    page_show += 1
 
         except asyncio.CancelledError:
             pass
