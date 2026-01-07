@@ -3,7 +3,8 @@ from datetime import timedelta
 from typing import Literal
 
 from sqlalchemy import select
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from src.db.models import BanList, BanStatus, ImgDataModel, TextDataModel, now_with_tz
 from src.db.session import get_session
@@ -17,18 +18,24 @@ async def add_ban(fid: int, group_id: int, ban_list: BanList) -> bool:
             session.add(ban_status)
             await session.flush()
 
-        stmt = insert(BanList).values(
-            fid=ban_list.fid,
-            user_id=ban_list.user_id,
-            portrait=ban_list.portrait,
-            ban_time=now_with_tz(),
-            operator_id=ban_list.operator_id,
-            enable=True,
-            unban_time=getattr(ban_list, "unban_time", None),
-            unban_operator_id=getattr(ban_list, "unban_operator_id", None),
-            text_reason=ban_list.text_reason,
-            img_reason=ban_list.img_reason,
-        )
+        values = {
+            "fid": ban_list.fid,
+            "user_id": ban_list.user_id,
+            "portrait": ban_list.portrait,
+            "ban_time": now_with_tz(),
+            "operator_id": ban_list.operator_id,
+            "enable": True,
+            "unban_time": getattr(ban_list, "unban_time", None),
+            "unban_operator_id": getattr(ban_list, "unban_operator_id", None),
+            "text_reason": ban_list.text_reason,
+            "img_reason": ban_list.img_reason,
+        }
+
+        if session.bind.dialect.name == "postgresql":
+            stmt = pg_insert(BanList).values(**values)
+        else:
+            stmt = sqlite_insert(BanList).values(**values)
+
         stmt = stmt.on_conflict_do_update(
             index_elements=["fid", "user_id"],
             set_={
