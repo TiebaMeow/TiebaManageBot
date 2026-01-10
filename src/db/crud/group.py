@@ -38,6 +38,25 @@ async def get_group(group_id: int) -> GroupInfo:
             return group
 
 
+async def get_group_by_fid(fid: int) -> GroupInfo:
+    for group in _GROUP_CACHE.values():
+        if group.fid == fid:
+            return group
+
+    async with _LOCK:
+        for group in _GROUP_CACHE.values():
+            if group.fid == fid:
+                return group
+
+        async with get_session() as session:
+            result = await session.execute(select(GroupInfo).where(GroupInfo.fid == fid))
+            group = result.scalars().first()
+            if not group:
+                raise KeyError(f"贴吧 {fid} 对应的群不存在。")
+            _GROUP_CACHE[group.group_id] = group
+            return group
+
+
 async def add_group(group: GroupInfo) -> None:
     async with _LOCK:
         async with get_session() as session:

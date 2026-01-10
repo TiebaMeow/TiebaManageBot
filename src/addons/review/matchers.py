@@ -1,16 +1,60 @@
 from arclet.alconna import Alconna, Args, MultiVar
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment, permission
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Query, on_alconna
 
-from src.addons.review import service
 from src.common import ClientCache
-from src.db.crud import group
+from src.db.crud.group import get_group
 from src.utils import (
     handle_tieba_uids,
     rule_admin,
     rule_signed,
 )
+
+from . import service
+
+query_rule_alc = Alconna("query_rule")
+
+query_rule_cmd = on_alconna(
+    command=query_rule_alc,
+    aliases={"规则列表", "规则查询"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@query_rule_cmd.handle()
+async def query_rule_handle(event: GroupMessageEvent):
+    group_info = await get_group(event.group_id)
+    first_send = False
+    page = 1
+    buffer: bytes | None = None
+    async for image in service.get_review_rule_strs(group_info.fid):
+        if not first_send:
+            first_send = True
+            await query_rule_cmd.send("以下是本吧的审查规则列表：")
+            buffer = image
+        else:
+            if buffer is not None:
+                img_seg = MessageSegment.image(buffer)
+                suffix = MessageSegment.text(f"第 {page} 页，继续查询请输入“下一页”。")
+                next_input = await query_rule_cmd.prompt(img_seg + suffix, timeout=60)
+                if next_input is None or next_input.extract_plain_text().strip() != "下一页":
+                    await query_rule_cmd.finish("已结束查询。")
+            buffer = image
+            page += 1
+    if buffer is not None:
+        img_seg = MessageSegment.image(buffer)
+        suffix = MessageSegment.text(f"第 {page} 页，已无更多内容，结束查询。")
+        await query_rule_cmd.finish(img_seg + suffix)
+    if not first_send:
+        await query_rule_cmd.finish("当前没有设置任何审查规则。")
+
 
 add_keyword_alc = Alconna(
     "add_keyword",
@@ -37,7 +81,7 @@ async def add_keyword_handle(
     event: GroupMessageEvent,
     raw_keywords: Query[tuple[str, ...]] = AlconnaQuery("keywords", ()),
 ):
-    group_info = await group.get_group(event.group_id)
+    group_info = await get_group(event.group_id)
     keywords = list(set(raw_keywords.result))
 
     existing_keywords = await service.get_existing_keywords(group_info.fid, keywords)
@@ -53,13 +97,13 @@ async def add_keyword_handle(
             confirm = await add_keyword_cmd.prompt(
                 f"请发送相应字母选择关键词“{keyword}”的处理方式" + "，发送相应大写字母批量设置所有关键词的处理方式：\n"
                 if len(new_keywords) > 1
-                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 仅通知\n发送其他内容取消操作。",
+                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。",
                 timeout=60,
             )
             if confirm is None:
                 await add_keyword_cmd.finish("操作超时，已取消。")
             confirm_text = confirm.extract_plain_text().strip()
-            if confirm_text in ("A", "B", "C"):
+            if confirm_text in ("A", "B", "C", "D"):
                 batch_type = confirm_text.lower()
                 confirm_text = batch_type
         else:
@@ -70,11 +114,13 @@ async def add_keyword_handle(
         elif confirm_text == "b":
             notify_type = "删除并通知"
         elif confirm_text == "c":
+            notify_type = "删封并通知"
+        elif confirm_text == "d":
             notify_type = "仅通知"
         else:
             await add_keyword_cmd.finish("操作已取消。")
 
-        await service.add_keyword_config(group_info.fid, group_info.group_id, keyword, notify_type)
+        await service.add_keyword_config(group_info.fid, keyword, notify_type)
 
     if new_keywords:
         await add_keyword_cmd.finish(f"已成功添加关键词：{'，'.join(new_keywords)}")
@@ -107,16 +153,13 @@ async def add_user_handle(
     if 0 in tieba_uids:
         await add_user_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
-    group_info = await group.get_group(event.group_id)
+    group_info = await get_group(event.group_id)
 
     raw_users = {}
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await client.tieba_uid2user_info(tieba_uid)
-        if user_info.user_id == 0:
-            await add_user_cmd.send(f"暂时无法获取贴吧ID为 {tieba_uid} 的用户信息，请重试。")
-            continue
-        raw_users[str(user_info.user_id)] = f"{user_info.nick_name}({user_info.tieba_uid})"
+        raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))
 
@@ -134,13 +177,13 @@ async def add_user_handle(
                 f"请发送相应字母选择监控用户“{user_display}”的处理方式"
                 + "，发送相应大写字母批量设置所有监控用户的处理方式：\n"
                 if len(new_users) > 1
-                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 仅通知\n发送其他内容取消操作。",
+                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。",
                 timeout=60,
             )
             if confirm is None:
                 await add_user_cmd.finish("操作超时，已取消。")
             confirm_text = confirm.extract_plain_text().strip()
-            if confirm_text in ("A", "B", "C"):
+            if confirm_text in ("A", "B", "C", "D"):
                 batch_type = confirm_text.lower()
                 confirm_text = batch_type
         else:
@@ -151,11 +194,13 @@ async def add_user_handle(
         elif confirm_text == "b":
             notify_type = "删除并通知"
         elif confirm_text == "c":
+            notify_type = "删封并通知"
+        elif confirm_text == "d":
             notify_type = "仅通知"
         else:
             await add_user_cmd.finish("操作已取消。")
 
-        await service.add_user_config(group_info.fid, group_info.group_id, user, notify_type)
+        await service.add_user_config(group_info.fid, user, user_display, notify_type)
 
     if new_users:
         new_user_strs = [raw_users[user] for user in new_users]

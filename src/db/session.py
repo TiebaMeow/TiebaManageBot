@@ -4,6 +4,7 @@ from pathlib import Path
 
 import nonebot
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from tiebameow.models.orm import RuleBase
 
 from logger import log
 
@@ -39,6 +40,9 @@ async def init_db() -> None:
                     engine = create_async_engine(pg_url, echo=False, future=True)
                     async with engine.begin() as conn:
                         await conn.run_sync(Base.metadata.create_all)
+                        enable_addons = getattr(config, "enable_addons", False)
+                        if enable_addons:
+                            await conn.run_sync(RuleBase.metadata.create_all)
                     _engine = engine
                     db_url = pg_url
                     log.info(f"Connected to PostgreSQL: {pg_host}:{pg_port}/{pg_db}")

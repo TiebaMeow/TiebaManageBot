@@ -36,7 +36,6 @@ __all__ = [
     "BanStatus",
     "BanList",
     "AssociatedList",
-    "ReviewConfig",
 ]
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
@@ -358,26 +357,3 @@ class AssociatedList(TimestampMixin, Base):
             self.user_name = []
         if self.nicknames is None:
             self.nicknames = []
-
-
-class ReviewConfig(TimestampMixin, Base):
-    """审核配置模型。
-
-    存储贴吧的审核规则配置。
-
-    Attributes:
-        fid (int): 贴吧 Forum ID (主键)。
-        group_id (int): 关联的群组 ID。
-        rule_type (str): 规则类型 (默认 '关键词')。
-        notify_type (str): 通知类型 (默认 '直接删除')。
-        rule_content (str): 规则内容。
-        last_update (datetime): 最后更新时间。
-    """
-
-    __tablename__ = "review_config"
-
-    fid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    rule_type: Mapped[str] = mapped_column(String(50), default="关键词", nullable=False)
-    notify_type: Mapped[str] = mapped_column(String(50), default="直接删除", nullable=False)
-    rule_content: Mapped[str] = mapped_column(Text, nullable=False)
