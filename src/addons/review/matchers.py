@@ -50,7 +50,7 @@ async def query_rule_handle(event: GroupMessageEvent):
             page += 1
     if buffer is not None:
         img_seg = MessageSegment.image(buffer)
-        suffix = MessageSegment.text(f"第 {page} 页，已无更多内容，结束查询。")
+        suffix = MessageSegment.text(f"第 {page} 页，已无更多内容。")
         await query_rule_cmd.finish(img_seg + suffix)
     if not first_send:
         await query_rule_cmd.finish("当前没有设置任何审查规则。")
@@ -94,12 +94,11 @@ async def add_keyword_handle(
 
     for keyword in new_keywords:
         if not batch_type:
-            confirm = await add_keyword_cmd.prompt(
-                f"请发送相应字母选择关键词“{keyword}”的处理方式" + "，发送相应大写字母批量设置所有关键词的处理方式：\n"
-                if len(new_keywords) > 1
-                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。",
-                timeout=60,
-            )
+            confirm_text = f"请发送相应字母选择关键词“{keyword}”的处理方式"
+            if len(new_keywords) > 1:
+                confirm_text += "，发送相应大写字母批量设置所有关键词的处理方式：\n"
+            confirm_text += "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
+            confirm = await add_keyword_cmd.prompt(confirm_text, timeout=60)
             if confirm is None:
                 await add_keyword_cmd.finish("操作超时，已取消。")
             confirm_text = confirm.extract_plain_text().strip()
@@ -173,13 +172,11 @@ async def add_user_handle(
     for user in new_users:
         user_display = raw_users[user]
         if not batch_type:
-            confirm = await add_user_cmd.prompt(
-                f"请发送相应字母选择监控用户“{user_display}”的处理方式"
-                + "，发送相应大写字母批量设置所有监控用户的处理方式：\n"
-                if len(new_users) > 1
-                else "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。",
-                timeout=60,
-            )
+            confirm_text = f"请发送相应字母选择监控用户“{user_display}”的处理方式"
+            if len(new_users) > 1:
+                confirm_text += "，发送相应大写字母批量设置所有监控用户的处理方式：\n"
+            confirm_text += "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
+            confirm = await add_user_cmd.prompt(confirm_text, timeout=60)
             if confirm is None:
                 await add_user_cmd.finish("操作超时，已取消。")
             confirm_text = confirm.extract_plain_text().strip()

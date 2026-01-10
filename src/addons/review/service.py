@@ -49,7 +49,7 @@ async def get_existing_keywords(fid: int, keywords: list[str]) -> list[str]:
 async def add_keyword_config(fid: int, keyword: str, notify_type: str) -> None:
     max_forum_rule_id = await get_max_forum_rule_id(fid)
     action_list = []
-    if notify_type in ("删除并通知", "删封并通知"):
+    if notify_type in ("直接删除", "删除并通知", "删封并通知"):
         action_list.append(Action(type=ActionType.DELETE, params={}))
     if notify_type in ("删封并通知"):
         action_list.append(Action(type=ActionType.BAN, params={"days": 1}))
