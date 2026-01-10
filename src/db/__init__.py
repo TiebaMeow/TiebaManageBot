@@ -7,7 +7,6 @@ from .models import (
     GroupInfo,
     Image,
     ImgDataModel,
-    ReviewConfig,
     TextDataModel,
 )
 from .session import get_session, init_db
@@ -24,7 +23,6 @@ __all__ = [
     "GroupInfo",
     "Image",
     "ImgDataModel",
-    "ReviewConfig",
     "TextDataModel",
     "get_session",
     "init_db",
