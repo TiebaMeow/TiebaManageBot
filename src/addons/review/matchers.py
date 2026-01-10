@@ -96,8 +96,8 @@ async def add_keyword_handle(
         if not batch_type:
             confirm_text = f"请发送相应字母选择关键词“{keyword}”的处理方式"
             if len(new_keywords) > 1:
-                confirm_text += "，发送相应大写字母批量设置所有关键词的处理方式：\n"
-            confirm_text += "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
+                confirm_text += "，发送相应大写字母批量设置所有关键词的处理方式"
+            confirm_text += "：\na. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
             confirm = await add_keyword_cmd.prompt(confirm_text, timeout=60)
             if confirm is None:
                 await add_keyword_cmd.finish("操作超时，已取消。")
@@ -174,8 +174,8 @@ async def add_user_handle(
         if not batch_type:
             confirm_text = f"请发送相应字母选择监控用户“{user_display}”的处理方式"
             if len(new_users) > 1:
-                confirm_text += "，发送相应大写字母批量设置所有监控用户的处理方式：\n"
-            confirm_text += "：\n" + "：a. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
+                confirm_text += "，发送相应大写字母批量设置所有监控用户的处理方式"
+            confirm_text += "：\na. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
             confirm = await add_user_cmd.prompt(confirm_text, timeout=60)
             if confirm is None:
                 await add_user_cmd.finish("操作超时，已取消。")
