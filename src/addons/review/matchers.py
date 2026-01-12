@@ -3,7 +3,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment, permi
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Query, on_alconna
 
-from src.common import ClientCache
+from src.common import ClientCache, tieba_uid2user_info_cached
 from src.db.crud.group import get_group
 from src.utils import (
     handle_tieba_uids,
@@ -157,7 +157,7 @@ async def add_user_handle(
     raw_users = {}
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
         raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))

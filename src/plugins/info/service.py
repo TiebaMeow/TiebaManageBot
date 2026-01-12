@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 
 import httpx
 
-from src.common import get_user_posts_cached, get_user_threads_cached
+from src.common import get_user_posts_cached, get_user_threads_cached, tieba_uid2user_info_cached
 from src.common.cache import get_tieba_name
 from src.db.crud import set_associated_data
 from src.utils import (
@@ -38,7 +38,7 @@ async def generate_checkout_msg(client: Client, tieba_id: int, checkout_tieba_co
     Returns:
         (base_content, image_content)
     """
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     nick_name_old = await client.get_nickname_old(user_info.user_id)
 
     user_tieba_obj = await client.get_follow_forums(user_info.user_id)
@@ -194,7 +194,7 @@ async def get_ban_logs(client: Client, fid: int, tieba_id: int) -> tuple[str, li
     Returns:
         (message, logs)
     """
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     nick_name_old = await client.get_nickname_old(user_info.user_id)
     search_value = user_info.user_name or nick_name_old
     if not search_value:
@@ -228,7 +228,7 @@ async def get_delete_logs(client: Client, fid: int, tieba_id: int) -> tuple[str,
     Returns:
         (message, logs)
     """
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     nick_name_old = await client.get_nickname_old(user_info.user_id)
     search_value = user_info.user_name or nick_name_old
     if not search_value:

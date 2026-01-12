@@ -1,5 +1,11 @@
 from .appeal import del_appeal_id, get_appeal_id, get_appeals, set_appeal_id, set_appeals
-from .tieba_client import ClientCache, get_tieba_name, get_user_posts_cached, get_user_threads_cached
+from .tieba_client import (
+    ClientCache,
+    get_tieba_name,
+    get_user_posts_cached,
+    get_user_threads_cached,
+    tieba_uid2user_info_cached,
+)
 
 __all__ = [
     "get_appeals",
@@ -11,4 +17,5 @@ __all__ = [
     "get_tieba_name",
     "get_user_threads_cached",
     "get_user_posts_cached",
+    "tieba_uid2user_info_cached",
 ]

@@ -9,6 +9,7 @@ from tiebameow.client import Client
 
 if TYPE_CHECKING:
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
+    from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 
 from src.db.crud import get_group
 
@@ -165,6 +166,15 @@ class ClientCache:
             for client in cls._master_clients.values():
                 await client.__aexit__()
             cls._master_clients = None
+
+
+async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid:
+    key = f"tieba_uid2user_info_cached:{tieba_uid}"
+    if ret := await in_memory_cache.get(key):
+        return ret
+    ret = await client.tieba_uid2user_info(tieba_uid)
+    await in_memory_cache.set(key, ret, expire=300)
+    return ret
 
 
 async def get_user_threads_cached(client: Client, user_id: int, pn: int) -> UserThreads:

@@ -8,7 +8,7 @@ from nonebot.typing import T_State
 from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
 from logger import log
-from src.common.cache import ClientCache, get_tieba_name
+from src.common.cache import ClientCache, get_tieba_name, tieba_uid2user_info_cached
 from src.db.crud import associated, autoban, group, image
 from src.db.models import GroupInfo, ImgDataModel, TextDataModel
 from src.utils import (
@@ -57,7 +57,7 @@ async def clear_posts_handle(
         await clear_posts_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     client = await ClientCache.get_bawu_client(group_info.group_id)
-    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
     user_ids = [user_info.user_id for user_info in user_infos]
     nicknames = [user_info.nick_name for user_info in user_infos]
     if mode.result == "方式1":
@@ -120,7 +120,7 @@ async def add_autoban_handle(
     state["group_info"] = group_info
 
     client = await ClientCache.get_client()
-    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
 
     state["user_infos"] = user_infos
     state["text_reasons"] = []
@@ -303,7 +303,7 @@ async def remove_autoban_handle(
         await remove_autoban_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     client = await ClientCache.get_bawu_client(group_info.group_id)
-    user_infos = [await client.tieba_uid2user_info(tieba_uid) for tieba_uid in tieba_uids]
+    user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
     success, failure = await service.remove_autoban_users(client, group_info, event.user_id, user_infos)
 
     await remove_autoban_cmd.send(f"处理完成，成功解除循封 {len(success)} 人，失败 {len(failure)} 人。")
@@ -339,7 +339,7 @@ async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tie
         await delete_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     client = await ClientCache.get_client()
-    user_info = await client.tieba_uid2user_info(tieba_uid)
+    user_info = await tieba_uid2user_info_cached(client, tieba_uid)
 
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
@@ -436,7 +436,7 @@ async def add_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_
         await add_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     client = await ClientCache.get_client()
-    user_info = await client.tieba_uid2user_info(tieba_uid)
+    user_info = await tieba_uid2user_info_cached(client, tieba_uid)
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
         await add_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")
@@ -525,7 +525,7 @@ async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[s
         await get_ban_reason_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
 
     client = await ClientCache.get_client()
-    user_info = await client.tieba_uid2user_info(tieba_uid)
+    user_info = await tieba_uid2user_info_cached(client, tieba_uid)
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":
         await get_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")

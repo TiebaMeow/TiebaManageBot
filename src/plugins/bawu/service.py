@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from aiotieba import PostSortType
 
+from src.common import tieba_uid2user_info_cached
 from src.db import GroupInfo, TextDataModel
 from src.db.crud import add_associated_data
 
@@ -127,7 +128,7 @@ async def blacklist_users(
     succeeded = []
     failed = []
     for tieba_uid in uids:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
         result = (
             await client.add_bawu_blacklist(group_info.fid, user_info.user_id)
             if blacklist
@@ -170,7 +171,7 @@ async def ban_users(
     succeeded = []
     failed = []
     for tieba_uid in uids:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
         if await client.block(group_info.fid, user_info.portrait, day=days):
             succeeded.append(tieba_uid)
             await add_associated_data(
@@ -202,7 +203,7 @@ async def unban_users(
     succeeded = []
     failed = []
     for tieba_uid in uids:
-        user_info = await client.tieba_uid2user_info(tieba_uid)
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
         if await client.unblock(group_info.fid, user_info.user_id):
             succeeded.append(tieba_uid)
             await add_associated_data(

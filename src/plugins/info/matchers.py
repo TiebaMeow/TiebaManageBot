@@ -21,7 +21,7 @@ from nonebot_plugin_alconna import (
     on_alconna,
 )
 
-from src.common.cache import ClientCache
+from src.common.cache import ClientCache, tieba_uid2user_info_cached
 from src.db import ImgDataModel, TextDataModel
 from src.db.crud import (
     add_associated_data,
@@ -153,7 +153,7 @@ async def check_posts_handle(
             await check_posts_cmd.finish("未查询到指定贴吧，请检查输入。")
     await check_posts_cmd.send("正在查询...")
 
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     consumer_task = asyncio.create_task(consumer(Producer(client, user_info, fids), check_posts_cmd))
     await consumer_task
 
@@ -185,7 +185,7 @@ async def add_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
         await add_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
 
     client = await ClientCache.get_client()
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     group_info = await get_group(event.group_id)
     state["user_info"] = user_info
     state["group_info"] = group_info
@@ -275,7 +275,7 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
         await get_associate_data_cmd.finish("贴吧ID格式错误，请检查输入。")
 
     client = await ClientCache.get_client()
-    user_info = await client.tieba_uid2user_info(tieba_id)
+    user_info = await tieba_uid2user_info_cached(client, tieba_id)
     state["user_info"] = user_info
 
     associated_data = await get_associated_data(user_info.user_id, group_info.fid)
