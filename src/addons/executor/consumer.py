@@ -6,21 +6,14 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
-from tiebameow.schemas.rules import Action  # noqa: TC002
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 
-class MatchedRule(BaseModel):
-    id: int
-    name: str
-    priority: int
-    actions: list[Action]
-
-
 class ReviewResultPayload(BaseModel):
-    matched_rules: list[MatchedRule]
+    fid: int
+    matched_rule_ids: list[int]
     object_type: str
     target_data: dict[str, Any]
     timestamp: float
