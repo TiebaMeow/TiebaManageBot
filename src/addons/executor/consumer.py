@@ -93,8 +93,7 @@ class Consumer:
             )
         except ResponseError as e:
             if "BUSYGROUP" not in str(e):
-                pass
-            raise e
+                raise e
 
     async def _process_message(self, message_id: str, fields: dict[str, Any]) -> None:
         """处理单条消息。
