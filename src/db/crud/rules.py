@@ -7,6 +7,11 @@ from tiebameow.schemas.rules import ReviewRule, RuleNode, TargetType
 from src.db.session import get_session
 
 
+async def get_rule(rule_id: int) -> ReviewRules | None:
+    async with get_session() as session:
+        return await session.get(ReviewRules, rule_id)
+
+
 async def get_rules(fid: int) -> AsyncGenerator[ReviewRules, None]:
     async with get_session() as session:
         result = await session.execute(
@@ -48,7 +53,18 @@ async def get_max_forum_rule_id(fid: int) -> int:
         return max_forum_rule_id if max_forum_rule_id is not None else 0
 
 
-async def add_rule(rule: ReviewRule) -> None:
+async def add_rule(rule: ReviewRule) -> int:
     async with get_session() as session:
-        session.add(ReviewRules.from_rule_data(rule))
+        new_rule = ReviewRules.from_rule_data(rule)
+        session.add(new_rule)
         await session.commit()
+        await session.refresh(new_rule)
+        return new_rule.id
+
+
+async def delete_rule(rule_id: int) -> None:
+    async with get_session() as session:
+        rule = await session.get(ReviewRules, rule_id)
+        if rule:
+            await session.delete(rule)
+            await session.commit()

@@ -1,6 +1,6 @@
 [project]
 name = "TiebaManageBot"
-version = "1.4.0"
+version = "2.0.0"
 description = "TiebaManageBot"
 authors = [{ name = "mxcoras", email = "mxcoras@outlook.com" }]
 readme = "README.md"
@@ -19,9 +19,9 @@ dependencies = [
     "nonebot2[fastapi]>=2.4.4",
     "pyjwt>=2.10.1",
     "python-multipart>=0.0.21",
-    "redis[hiredis]>=6.4.0",
+    "redis[hiredis]>=7.1.0",
     "sqlalchemy>=2.0.45",
-    "tiebameow[orm,renderer]>=0.2.4,<0.3.0",
+    "tiebameow[orm,renderer]>=0.2.8,<0.3.0",
 ]
 
 [dependency-groups]

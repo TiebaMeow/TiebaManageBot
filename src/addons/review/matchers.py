@@ -57,10 +57,8 @@ async def query_rule_handle(event: GroupMessageEvent):
 
 
 add_keyword_alc = Alconna(
-    "add_keyword",
-    Args[
-        "keywords", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个关键词，以空格分隔，支持正则表达式。")
-    ],
+    "add_keyword_rule",
+    Args["keywords", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个关键词，以空格分隔。")],
 )
 
 add_keyword_cmd = on_alconna(
@@ -119,14 +117,51 @@ async def add_keyword_handle(
         else:
             await add_keyword_cmd.finish("操作已取消。")
 
-        await service.add_keyword_config(group_info.fid, keyword, notify_type)
+        await service.add_keyword_config(group_info.fid, keyword, notify_type, event.user_id)
 
     if new_keywords:
         await add_keyword_cmd.finish(f"已成功添加关键词：{'，'.join(new_keywords)}")
 
 
+del_keyword_alc = Alconna(
+    "del_keyword_rule",
+    Args["keywords", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个关键词，以空格分隔。")],
+)
+
+del_keyword_cmd = on_alconna(
+    command=del_keyword_alc,
+    aliases={"删除关键词"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_keyword_cmd.handle()
+async def del_keyword_handle(
+    event: GroupMessageEvent,
+    raw_keywords: Query[tuple[str, ...]] = AlconnaQuery("keywords", ()),
+):
+    group_info = await get_group(event.group_id)
+    keywords = list(set(raw_keywords.result))
+
+    existing_keywords = await service.get_existing_keywords(group_info.fid, keywords)
+
+    if not existing_keywords:
+        await del_keyword_cmd.finish("所提供的关键词均不存在。")
+
+    for keyword in existing_keywords:
+        await service.remove_keyword_config(group_info.fid, keyword)
+
+    await del_keyword_cmd.finish(f"已成功删除关键词：{'，'.join(existing_keywords)}")
+
+
 add_user_alc = Alconna(
-    "add_user",
+    "add_user_rule",
     Args["users", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个贴吧ID，以空格分隔。")],
 )
 
@@ -154,7 +189,7 @@ async def add_user_handle(
 
     group_info = await get_group(event.group_id)
 
-    raw_users = {}
+    raw_users: dict[int, str] = {}
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
@@ -172,7 +207,7 @@ async def add_user_handle(
     for user in new_users:
         user_display = raw_users[user]
         if not batch_type:
-            confirm_text = f"请发送相应字母选择监控用户“{user_display}”的处理方式"
+            confirm_text = f"请发送相应字母选择监控用户 {user_display} 的处理方式"
             if len(new_users) > 1:
                 confirm_text += "，发送相应大写字母批量设置所有监控用户的处理方式"
             confirm_text += "：\na. 直接删除\nb. 删除并通知\nc. 删封并通知\nd. 仅通知\n发送其他内容取消操作。"
@@ -197,8 +232,152 @@ async def add_user_handle(
         else:
             await add_user_cmd.finish("操作已取消。")
 
-        await service.add_user_config(group_info.fid, user, user_display, notify_type)
+        await service.add_user_config(group_info.fid, user, user_display, notify_type, event.user_id)
 
     if new_users:
         new_user_strs = [raw_users[user] for user in new_users]
         await add_user_cmd.finish(f"已成功添加监控用户：{'，'.join(new_user_strs)}")
+
+
+del_user_alc = Alconna(
+    "del_user_rule",
+    Args["users", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个贴吧ID，以空格分隔。")],
+)
+
+del_user_cmd = on_alconna(
+    command=del_user_alc,
+    aliases={"删除监控用户"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_user_cmd.handle()
+async def del_user_handle(
+    event: GroupMessageEvent,
+    tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("users", ()),
+):
+    tieba_uids = await handle_tieba_uids(tieba_uid_strs.result)
+    if 0 in tieba_uids:
+        await del_user_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
+
+    group_info = await get_group(event.group_id)
+
+    raw_users: dict[int, str] = {}
+    client = await ClientCache.get_client()
+    for tieba_uid in tieba_uids:
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
+
+    existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))
+
+    if not existing_users:
+        await del_user_cmd.finish("所提供的用户均不存在。")
+
+    for user in existing_users:
+        await service.remove_user_config(group_info.fid, user)
+
+    existing_user_strs = [raw_users[user] for user in existing_users]
+    await del_user_cmd.finish(f"已成功删除监控用户：{'，'.join(existing_user_strs)}")
+
+
+add_at_alc = Alconna(
+    "add_at_rule",
+    Args["users", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个贴吧ID，以空格分隔。")],
+)
+
+add_at_cmd = on_alconna(
+    command=add_at_alc,
+    aliases={"添加监控艾特"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@add_at_cmd.handle()
+async def add_at_handle(
+    event: GroupMessageEvent,
+    tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("users", ()),
+):
+    tieba_uids = await handle_tieba_uids(tieba_uid_strs.result)
+    if 0 in tieba_uids:
+        await add_at_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
+
+    group_info = await get_group(event.group_id)
+
+    raw_users: dict[int, str] = {}
+    client = await ClientCache.get_client()
+    for tieba_uid in tieba_uids:
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
+
+    existing_users = await service.get_existing_ats(group_info.fid, list(raw_users.keys()))
+    if existing_users:
+        existing_user_strs = [raw_users[user] for user in existing_users]
+        await add_at_cmd.send(f"以下用户已存在：{'，'.join(existing_user_strs)}")
+
+    new_users = set(raw_users.keys()) - set(existing_users)
+    for user in new_users:
+        user_display = raw_users[user]
+        await service.add_at_config(group_info.fid, user, user_display, event.user_id)
+
+    if new_users:
+        new_user_strs = [raw_users[user] for user in new_users]
+        await add_at_cmd.finish(f"已成功添加监控用户：{'，'.join(new_user_strs)}")
+
+
+del_at_alc = Alconna(
+    "del_at_rule",
+    Args["users", MultiVar(str, "+"), Field(completion=lambda: "请输入一个或多个贴吧ID，以空格分隔。")],
+)
+
+del_at_cmd = on_alconna(
+    command=del_at_alc,
+    aliases={"删除监控艾特"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_at_cmd.handle()
+async def del_at_handle(
+    event: GroupMessageEvent,
+    tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("users", ()),
+):
+    tieba_uids = await handle_tieba_uids(tieba_uid_strs.result)
+    if 0 in tieba_uids:
+        await del_at_cmd.finish("参数中包含无法解析的贴吧ID，请检查输入。")
+
+    group_info = await get_group(event.group_id)
+
+    raw_users: dict[int, str] = {}
+    client = await ClientCache.get_client()
+    for tieba_uid in tieba_uids:
+        user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
+
+    existing_users = await service.get_existing_ats(group_info.fid, list(raw_users.keys()))
+
+    if not existing_users:
+        await del_at_cmd.finish("所提供的用户均不存在。")
+
+    for user in existing_users:
+        await service.remove_at_config(group_info.fid, user)
+
+    existing_user_strs = [raw_users[user] for user in existing_users]
+    await del_at_cmd.finish(f"已成功删除监控用户：{'，'.join(existing_user_strs)}")

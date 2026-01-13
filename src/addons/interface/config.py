@@ -10,6 +10,7 @@ class Config(BaseModel):
     redis_password: str = ""
     redis_db: int = 0
     redis_stream_prefix: str = "scraper:tieba:events"
+    redis_channel: str = "reviewer:rules:update"
 
     pg_host: str
     pg_port: int

@@ -18,6 +18,7 @@ from .group import (
     delete_group,
     get_all_groups,
     get_group,
+    get_group_by_fid,
     update_group,
 )
 from .image import (
@@ -25,6 +26,15 @@ from .image import (
     download_and_save_img,
     get_image_data,
     save_image,
+)
+from .rules import (
+    add_rule,
+    delete_rule,
+    get_existing_rule,
+    get_existing_rules,
+    get_max_forum_rule_id,
+    get_rule,
+    get_rules,
 )
 
 __all__ = [
@@ -43,9 +53,17 @@ __all__ = [
     "delete_group",
     "get_all_groups",
     "get_group",
+    "get_group_by_fid",
     "update_group",
     "delete_image",
     "download_and_save_img",
     "get_image_data",
     "save_image",
+    "add_rule",
+    "delete_rule",
+    "get_existing_rule",
+    "get_existing_rules",
+    "get_max_forum_rule_id",
+    "get_rule",
+    "get_rules",
 ]

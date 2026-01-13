@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
     from aiotieba.api.get_posts._classdef import Thread_p
     from aiotieba.typing import Post, Thread
-    from tiebameow.models.dto import PostDTO, ThreadDTO, ThreadpDTO
+    from tiebameow.models.dto import CommentDTO, PostDTO, ThreadDTO, ThreadpDTO
 
 driver = get_driver()
 
@@ -73,6 +73,20 @@ async def render_thread(
     """
     renderer = await RendererCache.get_renderer()
     return await renderer.render_thread_detail(thread, posts)
+
+
+async def render_content(content: ThreadDTO | PostDTO | CommentDTO) -> bytes:
+    """
+    渲染内容图片。
+
+    Args:
+        content: 需要渲染的内容对象
+
+    Returns:
+        内容图片 bytes
+    """
+    renderer = await RendererCache.get_renderer()
+    return await renderer.render_content(content)
 
 
 async def text_to_image(
