@@ -21,7 +21,7 @@ dependencies = [
     "python-multipart>=0.0.21",
     "redis[hiredis]>=7.1.0",
     "sqlalchemy>=2.0.45",
-    "tiebameow[orm,renderer]>=0.2.8,<0.3.0",
+    "tiebameow[orm,renderer]>=0.2.9,<0.3.0",
 ]
 
 [dependency-groups]
