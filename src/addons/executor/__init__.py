@@ -22,11 +22,12 @@ async def _run_consumer():
         await _consumer.run()
 
 
-@driver.on_startup
+@driver.on_bot_connect
 async def start_consumer():
     global task
-    log.info("Starting executor consumer...")
-    task = asyncio.create_task(_run_consumer())
+    if task is None:
+        log.info("Starting executor consumer...")
+        task = asyncio.create_task(_run_consumer())
 
 
 @driver.on_shutdown

@@ -40,7 +40,7 @@ class DefaultTemplate(BaseModel):
                         self.dto.floor = comment.floor
                         break
         base_message_str += f"触发对象类型：{content_type}"
-        base_message = {"type": "text", "data": base_message_str}
+        base_message = {"type": "text", "data": {"text": base_message_str}}
 
         content_img = await render_content(self.dto)
         img_b64 = base64.b64encode(content_img).decode()
@@ -64,7 +64,7 @@ class DefaultTemplate(BaseModel):
 
         suffix_message = {
             "type": "text",
-            "data": suffix_message_str,
+            "data": {"text": suffix_message_str},
         }
 
         return [base_message, image_message, suffix_message]
