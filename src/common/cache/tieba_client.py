@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 from src.db.crud import get_group
 
+from .ttl_cache import TTLCache
+
 CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -20,8 +22,7 @@ tiebaname_cache = Cache()
 tiebaname_cache.setup(f"disk://?directory={(CACHE_DIR / 'tieba_name_cache').as_posix()}&shards=0")
 
 
-in_memory_cache = Cache()
-in_memory_cache.setup("mem://")
+in_memory_cache = TTLCache(capacity=1000, default_ttl=300)
 
 
 class ClientCache:
@@ -170,28 +171,28 @@ class ClientCache:
 
 async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid:
     key = f"tieba_uid2user_info_cached:{tieba_uid}"
-    if ret := await in_memory_cache.get(key):
+    if ret := in_memory_cache.get(key):
         return ret
     ret = await client.tieba_uid2user_info(tieba_uid)
-    await in_memory_cache.set(key, ret, expire=300)
+    in_memory_cache.set(key, ret, ttl=300)
     return ret
 
 
 async def get_user_threads_cached(client: Client, user_id: int, pn: int) -> UserThreads:
     key = f"get_user_threads_cached:{user_id}:{pn}"
-    if ret := await in_memory_cache.get(key):
+    if ret := in_memory_cache.get(key):
         return ret
     ret = await client.get_user_threads(user_id, pn=pn)
-    await in_memory_cache.set(key, ret, expire=180)
+    in_memory_cache.set(key, ret, ttl=180)
     return ret
 
 
 async def get_user_posts_cached(client: Client, user_id: int, pn: int, rn: int) -> UserPostss:
     key = f"get_user_posts_cached:{user_id}:{pn}:{rn}"
-    if ret := await in_memory_cache.get(key):
+    if ret := in_memory_cache.get(key):
         return ret
     ret = await client.get_user_posts(user_id, pn=pn, rn=rn)
-    await in_memory_cache.set(key, ret, expire=180)
+    in_memory_cache.set(key, ret, ttl=180)
     return ret
 
 
