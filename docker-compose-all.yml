@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+  bot:
+    image: tiebameow/tiebamanagebot:latest
+    container_name: tiebamanagebot_app
+    environment:
+      - HOST=0.0.0.0
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USERNAME=postgres
+      - PG_PASSWORD=postgres
+      - PG_DB=tieba_data
+      - ENABLE_ADDONS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ADDON_PG_HOST=postgres
+      - ADDON_PG_PORT=5432
+      - ADDON_PG_USERNAME=postgres
+      - ADDON_PG_PASSWORD=postgres
+      - ADDON_PG_DB=tieba_data
+    volumes:
+      - ./bot_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "18765:18765"
+    restart: unless-stopped
+
+  tiebascraper:
+    image: tiebameow/tiebascraper:latest
+    container_name: tiebascraper_app
+    # 虽然可以通过 environment 配置，但推荐使用 config.toml 文件进行更详细的配置
+    # environment:
+    #   - DATABASE__HOST=postgres
+    #   - DATABASE__PORT=5432
+    #   - DATABASE__USERNAME=postgres
+    #   - DATABASE__PASSWORD=postgres
+    #   - DATABASE__NAME=tieba_data
+    #   - REDIS__HOST=redis
+    #   - REDIS__PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config.docker.toml:/app/config.toml:ro
+      - ./scraper_logs:/app/logs
+    command: ["--mode", "periodic"]
+    restart: unless-stopped
+
+  tiebareviewer:
+    image: tiebameow/tiebacontentreviewer:latest
+    container_name: tiebareviewer_app
+    restart: always
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=tieba_reviewer
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: timescale/timescaledb:latest-pg18
+    container_name: postgres
+    environment:
+      POSTGRES_DB: tieba_data
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
