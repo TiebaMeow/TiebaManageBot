@@ -23,7 +23,7 @@ class Config(BaseModel):
     def compatible_type(cls, values: dict) -> dict:
         """兼容 eval 从环境变量读取的整数类型字段"""
         int_fields = [
-            "pg_password",
+            "addon_pg_password",
         ]
         for field in int_fields:
             if field in values and isinstance(values[field], int):
