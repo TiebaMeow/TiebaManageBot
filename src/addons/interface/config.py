@@ -12,11 +12,11 @@ class Config(BaseModel):
     redis_stream_prefix: str = "scraper:tieba:events"
     redis_channel: str = "reviewer:rules:update"
 
-    pg_host: str
-    pg_port: int
-    pg_username: str
-    pg_password: str
-    pg_db: str
+    addon_pg_host: str
+    addon_pg_port: int
+    addon_pg_username: str
+    addon_pg_password: str
+    addon_pg_db: str
 
     @model_validator(mode="before")
     @classmethod
@@ -35,8 +35,8 @@ class Config(BaseModel):
     def database_url(self) -> PostgresDsn:
         """生成PostgreSQL数据库连接URL"""
         return PostgresDsn(
-            f"postgresql+asyncpg://{quote_plus(self.pg_username)}:{quote_plus(self.pg_password)}"
-            f"@{self.pg_host}:{self.pg_port}/{self.pg_db}"
+            f"postgresql+asyncpg://{quote_plus(self.addon_pg_username)}:{quote_plus(self.addon_pg_password)}"
+            f"@{self.addon_pg_host}:{self.addon_pg_port}/{self.addon_pg_db}"
         )
 
     @computed_field
