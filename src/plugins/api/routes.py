@@ -55,7 +55,7 @@ class Ban(BaseBody):
 @app.post("/api/checkout", status_code=status.HTTP_200_OK)
 async def checkout(body: Checkout, _: Annotated[str | None, Depends(require_token)]):
     bot = get_bot()
-    client = await ClientCache.get_client()
+    client = await ClientCache.get_bawu_client(body.group_id)
     base_content, image_bytes = await generate_checkout_msg(client, body.tieba_uid)
     img_b64 = base64.b64encode(image_bytes).decode()
     message = [
