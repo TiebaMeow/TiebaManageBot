@@ -129,6 +129,9 @@ async def blacklist_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            failed.append(tieba_uid)
+            continue
         result = (
             await client.add_bawu_blacklist(group_info.fid, user_info.user_id)
             if blacklist
@@ -172,6 +175,9 @@ async def ban_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            failed.append(tieba_uid)
+            continue
         if await client.block(group_info.fid, user_info.portrait, day=days):
             succeeded.append(tieba_uid)
             await add_associated_data(
@@ -204,6 +210,9 @@ async def unban_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            failed.append(tieba_uid)
+            continue
         if await client.unblock(group_info.fid, user_info.user_id):
             succeeded.append(tieba_uid)
             await add_associated_data(

@@ -69,6 +69,8 @@ async def handle_check_posts_plus(
                     fids.append(fid)
 
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
+    if user_info is None:
+        await check_posts_plus_cmd.finish("用户信息获取失败，请稍后重试。")
 
     producer = DBProducer(user_info, fids)
     await consumer(producer, check_posts_plus_cmd)

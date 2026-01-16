@@ -169,11 +169,14 @@ class ClientCache:
             cls._master_clients = None
 
 
-async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid:
+async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid | None:
     key = f"tieba_uid2user_info_cached:{tieba_uid}"
     if ret := in_memory_cache.get(key):
         return ret
-    ret = await client.tieba_uid2user_info(tieba_uid)
+    try:
+        ret = await client.tieba_uid2user_info(tieba_uid)
+    except Exception:
+        return None
     in_memory_cache.set(key, ret, ttl=300)
     return ret
 

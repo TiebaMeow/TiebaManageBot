@@ -78,6 +78,8 @@ async def checkout_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
 
     client = await ClientCache.get_bawu_client(event.group_id)
     base_content, image_content = await service.generate_checkout_msg(client, tieba_id, plugin_config.checkout_tieba)
+    if not base_content:
+        await checkout_cmd.finish("用户信息获取失败，请稍后重试。")
 
     await checkout_cmd.finish(message=MessageSegment.text(base_content) + MessageSegment.image(image_content))
 
@@ -151,9 +153,12 @@ async def check_posts_handle(
                     fids.append(fid)
         if not fids:
             await check_posts_cmd.finish("未查询到指定贴吧，请检查输入。")
-    await check_posts_cmd.send("正在查询...")
 
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
+    if user_info is None:
+        await check_posts_cmd.finish("用户信息获取失败，请稍后重试。")
+
+    await check_posts_cmd.send("正在查询...")
     consumer_task = asyncio.create_task(consumer(Producer(client, user_info, fids), check_posts_cmd))
     await consumer_task
 
@@ -186,6 +191,8 @@ async def add_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
+    if user_info is None:
+        await add_associate_data_cmd.finish("用户信息获取失败，请稍后重试。")
     group_info = await get_group(event.group_id)
     state["user_info"] = user_info
     state["group_info"] = group_info
@@ -276,6 +283,8 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
+    if user_info is None:
+        await get_associate_data_cmd.finish("用户信息获取失败，请稍后重试。")
     state["user_info"] = user_info
 
     associated_data = await get_associated_data(user_info.user_id, group_info.fid)

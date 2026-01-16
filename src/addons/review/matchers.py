@@ -193,6 +193,8 @@ async def add_user_handle(
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            await add_user_cmd.finish("用户信息获取失败，请稍后重试。")
         raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))
@@ -272,6 +274,8 @@ async def del_user_handle(
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            await del_user_cmd.finish("用户信息获取失败，请稍后重试。")
         raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_users(group_info.fid, list(raw_users.keys()))
@@ -319,6 +323,8 @@ async def add_at_handle(
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            await add_at_cmd.finish("用户信息获取失败，请稍后重试。")
         raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_ats(group_info.fid, list(raw_users.keys()))
@@ -369,6 +375,8 @@ async def del_at_handle(
     client = await ClientCache.get_client()
     for tieba_uid in tieba_uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
+        if user_info is None:
+            await del_at_cmd.finish("用户信息获取失败，请稍后重试。")
         raw_users[user_info.user_id] = f"{user_info.nick_name}({user_info.tieba_uid})"
 
     existing_users = await service.get_existing_ats(group_info.fid, list(raw_users.keys()))

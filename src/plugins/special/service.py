@@ -98,7 +98,10 @@ async def add_ban_and_block(
 
     tieba_success = False
     if db_success:
-        tieba_success = await client.block(fid, user.portrait, day=10)
+        try:
+            tieba_success = await client.block(fid, user.portrait, day=10)
+        except Exception:
+            tieba_success = False
 
     return db_success, bool(tieba_success)
 
@@ -153,7 +156,10 @@ async def unban_and_unblock(client: Client, fid: int, operator_id: int, user_id:
     db_success = await autoban.unban(fid, operator_id, user_id)
     tieba_success = False
     if db_success:
-        tieba_success = await client.unblock(fid, user_id)
+        try:
+            tieba_success = await client.unblock(fid, user_id)
+        except Exception:
+            tieba_success = False
     return db_success, bool(tieba_success)
 
 
