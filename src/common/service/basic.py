@@ -24,13 +24,6 @@ if TYPE_CHECKING:
 config = nonebot.get_driver().config
 enable_addons = getattr(config, "enable_addons", False)
 
-_addon_crud = None
-
-if enable_addons:
-    from src.addons.interface import crud
-
-    _addon_crud = crud
-
 
 async def generate_checkout_msg(
     client: Client, uid: int | str, checkout_tieba_config: str | None = None
@@ -103,8 +96,10 @@ async def generate_checkout_msg(
                 else:
                     user_posts_count[post.fid] = 1
 
-    if not user_posts_count and _addon_crud:
-        user_stats = await _addon_crud.user_posts.get_user_stats(user_info.user_id)
+    if not user_posts_count and enable_addons:
+        from src.addons.interface import crud
+
+        user_stats = await crud.user_posts.get_user_stats(user_info.user_id)
         for stat in user_stats:
             if stat.thread_count + stat.post_count + stat.comment_count > 0:
                 user_posts_count[stat.fid] = stat.thread_count + stat.post_count + stat.comment_count
