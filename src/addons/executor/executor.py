@@ -34,6 +34,9 @@ class Executor:
         group_info = await get_group_by_fid(payload.fid)
         object_dto = deserialize(payload.object_type, payload.object_data)
 
+        deleted = False
+        banned = False
+        notified = False
         for rule_id in payload.matched_rule_ids:
             rule = await get_rule(rule_id)
             if not rule:
@@ -41,15 +44,22 @@ class Executor:
 
             rule = rule.to_rule_data()
             actions = rule.actions
-            deleted = False
-            banned = False
-            if actions.delete.enabled:
-                deleted = await self._handle_delete(group_info, object_dto)
-            if actions.ban.enabled:
+            _deleted = False
+            _banned = False
+            if actions.delete.enabled and not deleted:
+                _deleted = await self._handle_delete(group_info, object_dto)
+                if _deleted:
+                    deleted = True
+            if actions.ban.enabled and not banned:
                 days = rule.actions.ban.days
-                banned = await self._handle_ban(group_info, object_dto, days=days)
+                _banned = await self._handle_ban(group_info, object_dto, days=days)
+                if _banned:
+                    banned = True
             if actions.notify.enabled:
-                await self._handle_notify(group_info, object_dto, rule, deleted, banned)
+                if notified and not (_deleted or _banned):
+                    continue
+                await self._handle_notify(group_info, object_dto, rule, _deleted, _banned)
+                notified = True
 
     async def _handle_delete(
         self,

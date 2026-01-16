@@ -61,6 +61,10 @@ class DefaultTemplate(BaseModel):
         user_info = await client.get_user_info(self.dto.author_id)
         suffix_message_str += f"用户：{user_info.show_name} ({user_info.tieba_uid})\n"
         suffix_message_str += f"https://tieba.baidu.com/p/{self.dto.tid}"
+        if isinstance(self.dto, PostDTO):
+            suffix_message_str += f"?pid={self.dto.pid}#{self.dto.pid}"
+        elif isinstance(self.dto, CommentDTO):
+            suffix_message_str += f"?pid={self.dto.pid}#{self.dto.cid}"
 
         suffix_message = {
             "type": "text",
