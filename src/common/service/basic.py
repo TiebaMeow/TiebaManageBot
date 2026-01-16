@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote_plus
 
 import httpx
+import nonebot
 
 from src.common.cache import get_tieba_name, get_user_posts_cached, get_user_threads_cached
 from src.db import TextDataModel
@@ -19,6 +20,16 @@ if TYPE_CHECKING:
     from tiebameow.client import Client
 
     from src.db import GroupInfo
+
+config = nonebot.get_driver().config
+enable_addons = getattr(config, "enable_addons", False)
+
+_addon_crud = None
+
+if enable_addons:
+    from src.addons.interface import crud
+
+    _addon_crud = crud
 
 
 async def generate_checkout_msg(
@@ -91,6 +102,12 @@ async def generate_checkout_msg(
                     user_posts_count[post.fid] += 1
                 else:
                     user_posts_count[post.fid] = 1
+
+    if not user_posts_count and _addon_crud:
+        user_stats = await _addon_crud.user_posts.get_user_stats(user_info.user_id)
+        for stat in user_stats:
+            if stat.thread_count + stat.post_count + stat.comment_count > 0:
+                user_posts_count[stat.fid] = stat.thread_count + stat.post_count + stat.comment_count
 
     sorted_posts_count = sorted(user_posts_count.items(), key=operator.itemgetter(1), reverse=True)
     sorted_posts_count = sorted_posts_count[:30]
