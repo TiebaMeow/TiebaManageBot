@@ -1,14 +1,15 @@
-import time
+import base64
 from itertools import count
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from nonebot import get_app, get_bot, get_driver, get_plugin_config
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
-from nonebot.adapters.onebot.v11.event import Sender
-from nonebot.message import handle_event
+from nonebot import get_app, get_bot, get_plugin_config
 from pydantic import BaseModel
+
+from src.common.cache import ClientCache
+from src.common.service.basic import ban_user, delete_thread, generate_checkout_msg
+from src.db.crud import get_group
 
 from .config import Config
 
@@ -53,74 +54,41 @@ class Ban(BaseBody):
 
 @app.post("/api/checkout", status_code=status.HTTP_200_OK)
 async def checkout(body: Checkout, _: Annotated[str | None, Depends(require_token)]):
-    driver = get_driver()
     bot = get_bot()
-    event = GroupMessageEvent(
-        time=int(time.time()),
-        self_id=int(bot.self_id),
-        post_type="message",
-        sub_type="group",
-        user_id=body.user_id,
-        message_type="group",
-        message_id=next(message_id_generator),
-        message=Message([MessageSegment.text(f"/查成分 {body.tieba_uid}")]),
-        original_message=Message([MessageSegment.text(f"/查成分 {body.tieba_uid}")]),
-        raw_message=f"/查成分 {body.tieba_uid}",
-        font=0,
-        sender=Sender(
-            user_id=body.user_id,
-        ),
-        group_id=body.group_id,
-    )
-    driver.task_group.start_soon(handle_event, bot, event)
+    client = await ClientCache.get_client()
+    base_content, image_bytes = await generate_checkout_msg(client, body.tieba_uid)
+    img_b64 = base64.b64encode(image_bytes).decode()
+    message = [
+        {"type": "text", "data": {"text": base_content}},
+        {"type": "image", "data": {"file": f"base64://{img_b64}"}},
+    ]
+    await bot.call_api("send_group_msg", group_id=body.group_id, message=message)
     return {"status": "ok"}
 
 
 @app.post("/api/delete", status_code=status.HTTP_200_OK)
 async def delete(body: Delete, _: Annotated[str | None, Depends(require_token)]):
-    driver = get_driver()
     bot = get_bot()
-    event = GroupMessageEvent(
-        time=int(time.time()),
-        self_id=int(bot.self_id),
-        post_type="message",
-        sub_type="group",
-        user_id=body.user_id,
-        message_type="group",
-        message_id=next(message_id_generator),
-        message=Message([MessageSegment.text(f"/删贴 {body.thread_id}")]),
-        original_message=Message([MessageSegment.text(f"/删贴 {body.thread_id}")]),
-        raw_message=f"/删贴 {body.thread_id}",
-        font=0,
-        sender=Sender(
-            user_id=body.user_id,
-        ),
+    group_info = await get_group(body.group_id)
+    client = await ClientCache.get_bawu_client(body.group_id)
+    result = await delete_thread(client, group_info, body.thread_id, uploader_id=body.user_id)
+    await bot.call_api(
+        "send_group_msg",
         group_id=body.group_id,
+        message=[{"type": "text", "data": {"text": f"{'删除成功' if result else '删除失败'}。"}}],
     )
-    driver.task_group.start_soon(handle_event, bot, event)
     return {"status": "ok"}
 
 
 @app.post("/api/ban", status_code=status.HTTP_200_OK)
 async def ban(body: Ban, _: Annotated[str | None, Depends(require_token)]):
-    driver = get_driver()
     bot = get_bot()
-    event = GroupMessageEvent(
-        time=int(time.time()),
-        self_id=int(bot.self_id),
-        post_type="message",
-        sub_type="group",
-        user_id=body.user_id,
-        message_type="group",
-        message_id=next(message_id_generator),
-        message=Message([MessageSegment.text(f"/封禁 {body.days} {body.tieba_uid}")]),
-        original_message=Message([MessageSegment.text(f"/封禁 {body.days} {body.tieba_uid}")]),
-        raw_message=f"/封禁 {body.days} {body.tieba_uid}",
-        font=0,
-        sender=Sender(
-            user_id=body.user_id,
-        ),
+    group_info = await get_group(body.group_id)
+    client = await ClientCache.get_bawu_client(body.group_id)
+    result = await ban_user(client, group_info, body.tieba_uid, days=body.days, uploader_id=body.user_id)
+    await bot.call_api(
+        "send_group_msg",
         group_id=body.group_id,
+        message=[{"type": "text", "data": {"text": f"{'封禁成功' if result else '封禁失败'}。"}}],
     )
-    driver.task_group.start_soon(handle_event, bot, event)
     return {"status": "ok"}
