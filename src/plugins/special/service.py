@@ -100,8 +100,9 @@ async def add_ban_and_block(
     if db_success:
         try:
             tieba_success = await client.block(fid, user.portrait, day=10)
-        except Exception:
-            tieba_success = False
+        except Exception as e:
+            if "1211068" in str(e):
+                tieba_success = True
 
     return db_success, bool(tieba_success)
 

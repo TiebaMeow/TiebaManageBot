@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from nonebot import get_app, get_bot, get_plugin_config
 from pydantic import BaseModel
 
-from src.common.cache import ClientCache
+from src.common.cache import ClientCache, tieba_uid2user_info_cached
 from src.common.service.basic import ban_user, delete_thread, generate_checkout_msg
 from src.db.crud import get_group
 
@@ -56,7 +56,8 @@ class Ban(BaseBody):
 async def checkout(body: Checkout, _: Annotated[str | None, Depends(require_token)]):
     bot = get_bot()
     client = await ClientCache.get_bawu_client(body.group_id)
-    base_content, image_bytes = await generate_checkout_msg(client, body.tieba_uid)
+    user_info_t = await tieba_uid2user_info_cached(client, body.tieba_uid)
+    base_content, image_bytes = await generate_checkout_msg(client, user_info_t.user_id)
     img_b64 = base64.b64encode(image_bytes).decode()
     message = [
         {"type": "text", "data": {"text": base_content}},
@@ -85,7 +86,8 @@ async def ban(body: Ban, _: Annotated[str | None, Depends(require_token)]):
     bot = get_bot()
     group_info = await get_group(body.group_id)
     client = await ClientCache.get_bawu_client(body.group_id)
-    result = await ban_user(client, group_info, body.tieba_uid, days=body.days, uploader_id=body.user_id)
+    user_info_t = await tieba_uid2user_info_cached(client, body.tieba_uid)
+    result = await ban_user(client, group_info, body.tieba_uid, days=body.days, uploader_id=user_info_t.user_id)
     await bot.call_api(
         "send_group_msg",
         group_id=body.group_id,
