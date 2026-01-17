@@ -129,7 +129,7 @@ async def blacklist_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-        if user_info is None:
+        if user_info.user_id == 0:
             failed.append(tieba_uid)
             continue
         result = (
@@ -175,7 +175,7 @@ async def ban_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-        if user_info is None:
+        if user_info.user_id == 0:
             failed.append(tieba_uid)
             continue
         if await client.block(group_info.fid, user_info.portrait, day=days):
@@ -210,7 +210,7 @@ async def unban_users(
     failed = []
     for tieba_uid in uids:
         user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-        if user_info is None:
+        if user_info.user_id == 0:
             failed.append(tieba_uid)
             continue
         if await client.unblock(group_info.fid, user_info.user_id):

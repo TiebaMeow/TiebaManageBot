@@ -4,12 +4,13 @@ from asyncio import Semaphore
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
 from cashews import Cache
 from tiebameow.client import Client
 
 if TYPE_CHECKING:
     from aiotieba.api.get_user_contents._classdef import UserPostss, UserThreads
-    from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
+
 
 from src.db.crud import get_group
 
@@ -169,14 +170,14 @@ class ClientCache:
             cls._master_clients = None
 
 
-async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid | None:
+async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid:
     key = f"tieba_uid2user_info_cached:{tieba_uid}"
     if ret := in_memory_cache.get(key):
         return ret
     try:
         ret = await client.tieba_uid2user_info(tieba_uid)
     except Exception:
-        return None
+        return UserInfo_TUid()
     in_memory_cache.set(key, ret, ttl=300)
     return ret
 

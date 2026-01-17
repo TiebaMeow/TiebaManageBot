@@ -155,7 +155,7 @@ async def check_posts_handle(
             await check_posts_cmd.finish("未查询到指定贴吧，请检查输入。")
 
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         await check_posts_cmd.finish("用户信息获取失败，请稍后重试。")
 
     await check_posts_cmd.send("正在查询...")
@@ -191,7 +191,7 @@ async def add_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         await add_associate_data_cmd.finish("用户信息获取失败，请稍后重试。")
     group_info = await get_group(event.group_id)
     state["user_info"] = user_info
@@ -283,7 +283,7 @@ async def get_associate_data_handle(event: GroupMessageEvent, state: T_State, ti
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         await get_associate_data_cmd.finish("用户信息获取失败，请稍后重试。")
     state["user_info"] = user_info
 

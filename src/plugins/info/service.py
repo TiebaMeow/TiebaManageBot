@@ -39,7 +39,7 @@ async def generate_checkout_msg(client: Client, tieba_id: int, checkout_tieba_co
         (base_content, image_content)
     """
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         return "", b""
     nick_name_old = await client.get_nickname_old(user_info.user_id)
 
@@ -197,7 +197,7 @@ async def get_ban_logs(client: Client, fid: int, tieba_id: int) -> tuple[str, li
         (message, logs)
     """
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         return "用户信息获取失败，请稍后重试。", []
     nick_name_old = await client.get_nickname_old(user_info.user_id)
     search_value = user_info.user_name or nick_name_old
@@ -233,7 +233,7 @@ async def get_delete_logs(client: Client, fid: int, tieba_id: int) -> tuple[str,
         (message, logs)
     """
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         return "用户信息获取失败，请稍后重试。", []
     nick_name_old = await client.get_nickname_old(user_info.user_id)
     search_value = user_info.user_name or nick_name_old

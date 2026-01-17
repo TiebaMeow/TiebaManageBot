@@ -58,10 +58,10 @@ async def clear_posts_handle(
 
     client = await ClientCache.get_bawu_client(group_info.group_id)
     user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
-    if None in user_infos:
+    if any(user_info.user_id == 0 for user_info in user_infos):
         await clear_posts_cmd.finish("参数中包含无法获取的用户信息，请稍后重试。")
-    user_ids = [user_info.user_id for user_info in user_infos if user_info is not None]
-    nicknames = [user_info.nick_name for user_info in user_infos if user_info is not None]
+    user_ids = [user_info.user_id for user_info in user_infos if user_info.user_id != 0]
+    nicknames = [user_info.nick_name for user_info in user_infos if user_info.user_id != 0]
     if mode.result == "方式1":
         confirm = await clear_posts_cmd.prompt(
             f"即将使用方式1（遍历用户发贴历史）清理用户 {'，'.join(nicknames)} 在本吧的所有发言。\n"
@@ -123,7 +123,7 @@ async def add_autoban_handle(
 
     client = await ClientCache.get_client()
     user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
-    if user_infos[0] is None or None in user_infos:
+    if any(user_info.user_id == 0 for user_info in user_infos):
         await add_autoban_cmd.finish("参数中包含无法获取的用户信息，请稍后重试。")
 
     state["user_infos"] = user_infos
@@ -308,7 +308,7 @@ async def remove_autoban_handle(
 
     client = await ClientCache.get_bawu_client(group_info.group_id)
     user_infos = [await tieba_uid2user_info_cached(client, tieba_uid) for tieba_uid in tieba_uids]
-    if None in user_infos:
+    if any(user_info.user_id == 0 for user_info in user_infos):
         await remove_autoban_cmd.finish("参数中包含无法获取的用户信息，请稍后重试。")
 
     success, failure = await service.remove_autoban_users(client, group_info, event.user_id, user_infos)  # type: ignore
@@ -347,7 +347,7 @@ async def delete_ban_reason_handle(event: GroupMessageEvent, state: T_State, tie
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-    if user_info is None:
+    if user_info.user_id == 0:
         await delete_ban_reason_cmd.finish("用户信息获取失败，请稍后重试。")
 
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
@@ -446,7 +446,7 @@ async def add_ban_reason_handle(event: GroupMessageEvent, state: T_State, tieba_
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-    if user_info is None:
+    if user_info.user_id == 0:
         await add_ban_reason_cmd.finish("用户信息获取失败，请稍后重试。")
 
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
@@ -538,7 +538,7 @@ async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[s
 
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_uid)
-    if user_info is None:
+    if user_info.user_id == 0:
         await get_ban_reason_cmd.finish("用户信息获取失败，请稍后重试。")
     is_banned, ban_reason = await autoban.get_ban_status(group_info.fid, user_info.user_id)
     if is_banned == "not":

@@ -69,7 +69,7 @@ async def handle_check_posts_plus(
                     fids.append(fid)
 
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
-    if user_info is None:
+    if user_info.user_id == 0:
         await check_posts_plus_cmd.finish("用户信息获取失败，请稍后重试。")
 
     producer = DBProducer(user_info, fids)
@@ -132,7 +132,7 @@ async def handle_post_stats(
     client = await ClientCache.get_client()
     user_info = await tieba_uid2user_info_cached(client, tieba_id)
 
-    if not user_info:
+    if user_info.user_id == 0:
         await post_stats_cmd.finish("未能获取用户信息。")
 
     stats = await get_user_stats(user_info.user_id)
