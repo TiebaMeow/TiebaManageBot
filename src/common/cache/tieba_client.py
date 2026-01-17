@@ -73,7 +73,6 @@ class ClientCache:
             group.slave_bduss,
             semaphore=cls._semaphore,
             retry_attempts=5,
-            try_ws=True,
         )
         await client.__aenter__()
         cls._bawu_clients[group_id] = client
@@ -100,7 +99,6 @@ class ClientCache:
             group.slave_stoken,
             semaphore=cls._semaphore,
             retry_attempts=5,
-            try_ws=True,
         )
         await client.__aenter__()
         cls._stoken_clients[group_id] = client
@@ -125,7 +123,6 @@ class ClientCache:
             group.master_bduss,
             semaphore=cls._semaphore,
             retry_attempts=5,
-            try_ws=True,
         )
         await client.__aenter__()
         cls._master_clients[group_id] = client
