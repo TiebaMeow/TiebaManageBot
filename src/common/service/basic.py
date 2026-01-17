@@ -40,6 +40,7 @@ async def generate_checkout_msg(
         (base_content, image_content)
     """
     user_info = await client.get_user_info(uid)
+    nick_name_old = await client.get_nickname_old(user_info.user_id)
 
     user_tieba_obj = await client.get_follow_forums(user_info.user_id)
     if user_tieba_obj.objs:
@@ -117,7 +118,7 @@ async def generate_checkout_msg(
     ])
     user_info_str = (
         f"昵称：{user_info.nick_name_new}\n"
-        f"旧版昵称：{user_info.nick_name_old}\n"
+        f"旧版昵称：{nick_name_old}\n"
         f"用户名：{user_info.user_name}\n"
         f"贴吧ID：{user_info.tieba_uid}\n"
         f"user_id：{user_info.user_id}\n"
