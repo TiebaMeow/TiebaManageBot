@@ -16,6 +16,7 @@ from tiebameow.schemas.rules import (
     RuleGroup,
     TargetType,
 )
+from tiebameow.utils.time_utils import now_with_tz
 
 from src.addons.interface.publisher import publisher
 from src.db.crud.rules import (
@@ -214,6 +215,7 @@ async def set_level_threshold(fid: int, level: int, uploader_id: int) -> None:
             conditions=[
                 Condition(field=FieldType.LEVEL, operator=OperatorType.LT, value=level),
                 Condition(field=FieldType.LEVEL, operator=OperatorType.GT, value=0),
+                Condition(field=FieldType.CREATE_TIME, operator=OperatorType.GT, value=now_with_tz()),
             ],
         ),
         actions=actions,

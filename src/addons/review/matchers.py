@@ -416,6 +416,9 @@ async def set_level_threshold_handle(
     if existing_threshold is not None:
         await set_level_threshold_cmd.finish(f"当前已存在 {existing_threshold} 级等级墙。")
 
+    if level.result <= 0 or level.result > 17:
+        await set_level_threshold_cmd.finish("等级墙数值应在 1 到 17 之间。")
+
     confirm = await set_level_threshold_cmd.prompt(
         f"请确认是否设置等级墙为 {level.result} 级？"
         "等级墙将立即生效，bot 将自动删除所有低于该等级的用户的主题贴、回复、楼中楼。\n"
