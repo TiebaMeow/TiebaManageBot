@@ -41,6 +41,14 @@ async def get_existing_rules(fid: int, target_type: TargetType, rules: Sequence[
         return list(result.scalars().all())
 
 
+async def get_existing_level_threshold_rule(fid: int) -> ReviewRules | None:
+    async with get_session() as session:
+        result = await session.execute(
+            select(ReviewRules).where(ReviewRules.fid == fid, ReviewRules.name.contains("等级墙"))
+        )
+        return result.scalar_one_or_none()
+
+
 async def get_max_forum_rule_id(fid: int) -> int:
     async with get_session() as session:
         result = await session.execute(

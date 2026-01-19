@@ -5,11 +5,7 @@ from nonebot_plugin_alconna import AlconnaQuery, Field, Query, on_alconna
 
 from src.common import ClientCache, tieba_uid2user_info_cached
 from src.db.crud.group import get_group
-from src.utils import (
-    handle_tieba_uids,
-    rule_admin,
-    rule_signed,
-)
+from src.utils import handle_tieba_uids, rule_admin, rule_signed
 
 from . import service
 
@@ -389,3 +385,70 @@ async def del_at_handle(
 
     existing_user_strs = [raw_users[user] for user in existing_users]
     await del_at_cmd.finish(f"已成功删除监控用户：{'，'.join(existing_user_strs)}")
+
+
+set_level_threshold_alc = Alconna(
+    "set_level_threshold",
+    Args["level", int, Field(completion=lambda: "请输入等级墙数值（整数）。")],
+)
+
+
+set_level_threshold_cmd = on_alconna(
+    command=set_level_threshold_alc,
+    aliases={"设置等级墙"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@set_level_threshold_cmd.handle()
+async def set_level_threshold_handle(
+    event: GroupMessageEvent,
+    level: Query[int] = AlconnaQuery("level", 0),
+):
+    group_info = await get_group(event.group_id)
+    existing_threshold = await service.get_existing_level_threshold(group_info.fid)
+    if existing_threshold is not None:
+        await set_level_threshold_cmd.finish(f"当前已存在 {existing_threshold} 级等级墙。")
+
+    confirm = await set_level_threshold_cmd.prompt(
+        f"请确认是否设置等级墙为 {level.result} 级？"
+        "等级墙将立即生效，bot 将自动删除所有低于该等级的用户的主题贴、回复、楼中楼。\n"
+        "发送“确认”以继续，发送其他内容取消操作。",
+        timeout=60,
+    )
+    if confirm is None or confirm.extract_plain_text().strip() != "确认":
+        await set_level_threshold_cmd.finish("操作已取消。")
+    await service.set_level_threshold(group_info.fid, level.result, event.user_id)
+    await set_level_threshold_cmd.finish(f"已将等级墙设置为 {level.result} 级。")
+
+
+del_level_threshold_cmd = on_alconna(
+    command="del_level_threshold",
+    aliases={"删除等级墙"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_level_threshold_cmd.handle()
+async def del_level_threshold_handle(
+    event: GroupMessageEvent,
+):
+    group_info = await get_group(event.group_id)
+    existing_threshold = await service.get_existing_level_threshold(group_info.fid)
+    if existing_threshold is None:
+        await del_level_threshold_cmd.finish("当前不存在等级墙。")
+
+    await service.remove_level_threshold(group_info.fid)
+    await del_level_threshold_cmd.finish(f"已删除 {existing_threshold} 级等级墙。")
