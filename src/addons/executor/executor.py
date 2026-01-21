@@ -8,7 +8,7 @@ from tiebameow.parser.rule_parser import RuleEngineParser
 from tiebameow.serializer import deserialize
 
 from src.common.cache import ClientCache
-from src.common.service import ban_user, delete_post, delete_thread
+from src.common.service import ban_user, delete_post_no_record, delete_thread_no_record
 from src.db.crud import get_group_by_fid, get_rule
 
 from .template import DefaultTemplate
@@ -74,11 +74,11 @@ class Executor:
         """
         client = await ClientCache.get_bawu_client(group_info.group_id)
         if isinstance(object_dto, ThreadDTO):
-            return await delete_thread(client, group_info, object_dto.tid, uploader_id=0)
+            return await delete_thread_no_record(client, group_info.fid, object_dto.tid)
         elif isinstance(object_dto, PostDTO):
-            return await delete_post(client, group_info, object_dto.tid, object_dto.pid, uploader_id=0)
+            return await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.pid)
         elif isinstance(object_dto, CommentDTO):
-            return await delete_post(client, group_info, object_dto.tid, object_dto.cid, uploader_id=0)
+            return await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.cid)
 
     async def _handle_ban(
         self,

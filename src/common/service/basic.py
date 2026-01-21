@@ -135,6 +135,21 @@ async def generate_checkout_msg(
     return base_content, image_content
 
 
+async def delete_thread_no_record(client: Client, fid: int, tid: int) -> bool:
+    """
+    删贴不记录操作。
+
+    Args:
+        client: 已初始化的 Client 实例
+        fid: 贴吧ID
+        tid: 贴子ID
+
+    Returns:
+        是否删除成功
+    """
+    return bool(await client.del_thread(fid, tid))
+
+
 async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploader_id: int) -> bool:
     """
     删贴并记录操作。
@@ -189,6 +204,22 @@ async def delete_threads(
         else:
             failed.append(tid)
     return succeeded, failed
+
+
+async def delete_post_no_record(client: Client, fid: int, tid: int, pid: int) -> bool:
+    """
+    删回复不记录操作。
+
+    Args:
+        client: 已初始化的 Client 实例
+        fid: 贴吧ID
+        tid: 贴子ID
+        pid: 回复ID
+
+    Returns:
+        是否删除成功
+    """
+    return bool(await client.del_post(fid, tid, pid))
 
 
 async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int, uploader_id: int) -> bool:
