@@ -545,31 +545,41 @@ async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[s
         await get_ban_reason_cmd.finish(f"用户 {user_info.nick_name}({user_info.tieba_uid}) 不在循封列表中。")
 
     assert ban_reason is not None  # for pylance
+    ban_status_str = f"用户 {user_info.nick_name}({user_info.tieba_uid}) 循封状态："
     if is_banned == "unbanned":
-        unban_time_str = ban_reason.unban_time.strftime("%Y-%m-%d %H:%M:%S") if ban_reason.unban_time else "未知时间"
+        unban_time_str = ban_reason.unban_time.strftime("%Y-%m-%d %H:%M") if ban_reason.unban_time else "未知时间"
         unban_operator_id = ban_reason.unban_operator_id
-        await get_ban_reason_cmd.send(
-            f"用户 {user_info.nick_name}({user_info.tieba_uid}) 已于 {unban_time_str} 解除循封，"
+        ban_status_str += (
+            f"\n用户 {user_info.nick_name}({user_info.tieba_uid}) 已于 {unban_time_str} 解除循封，"
             f"操作人id：{unban_operator_id}。"
         )
-    ban_time_str = ban_reason.ban_time.strftime("%Y-%m-%d %H:%M:%S") if ban_reason.ban_time else "未知时间"
+
+    ban_time_str = ban_reason.ban_time.strftime("%Y-%m-%d %H:%M")
     ban_operator_id = ban_reason.operator_id
+    ban_status_str += f"\n循封开始时间：{ban_time_str}\n操作人id：{ban_operator_id}\n循封原因："
+
     text_reasons = list(enumerate(ban_reason.text_reason, start=1))
     text_reasons_list = [f"{i}. {text.text}" for i, text in text_reasons]
+    ban_status_str += f"\n{'\n'.join(text_reasons_list)}"
+
+    await get_ban_reason_cmd.send(ban_status_str)
+
     img_enum_start = len(text_reasons) + 1
     img_reasons = list(enumerate(ban_reason.img_reason, start=img_enum_start))
     img_reasons_list = []
+
     for i, img in img_reasons:
         img_data = await image.get_image_data(img.image_id)
         if img_data is None:
-            img_reasons_list.append(MessageSegment.text(f"{i}. 图片数据获取失败") + f"注释：{img.note}")
+            failed_img_text = f"{i}. 图片数据获取失败" + (f"注释：{img.note}" if img.note else "")
+            img_reasons_list.append(MessageSegment.text(failed_img_text))
         else:
-            img_reasons_list.append(f"{i}. " + MessageSegment.image(img_data) + f"注释：{img.note}")
-    await get_ban_reason_cmd.send(
-        f"用户 {user_info.nick_name}({user_info.tieba_uid}) 循封开始时间：{ban_time_str}\n操作人id：{ban_operator_id}\n"
-        "循封原因：" + f"\n{'\n'.join(text_reasons_list)}"
-    )
+            img_reasons_list.append(
+                f"{i}. " + MessageSegment.image(img_data) + (f"注释：{img.note}" if img.note else "")
+            )
+
     if img_reasons_list:
         img_msg = MessageSegment.text("\n").join(img_reasons_list)
         await get_ban_reason_cmd.send(img_msg)
+
     await get_ban_reason_cmd.finish()
