@@ -552,6 +552,8 @@ async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[s
             f"用户 {user_info.nick_name}({user_info.tieba_uid}) 已于 {unban_time_str} 解除循封，"
             f"操作人id：{unban_operator_id}。"
         )
+    ban_time_str = ban_reason.ban_time.strftime("%Y-%m-%d %H:%M:%S") if ban_reason.ban_time else "未知时间"
+    ban_operator_id = ban_reason.operator_id
     text_reasons = list(enumerate(ban_reason.text_reason, start=1))
     text_reasons_list = [f"{i}. {text.text}" for i, text in text_reasons]
     img_enum_start = len(text_reasons) + 1
@@ -564,7 +566,8 @@ async def get_ban_reason_handle(event: GroupMessageEvent, tieba_uid_str: Match[s
         else:
             img_reasons_list.append(f"{i}. " + MessageSegment.image(img_data) + f"注释：{img.note}")
     await get_ban_reason_cmd.send(
-        f"用户 {user_info.nick_name}({user_info.tieba_uid}) 的循封原因：\n" + "\n".join(text_reasons_list)
+        f"用户 {user_info.nick_name}({user_info.tieba_uid}) 循封开始时间：{ban_time_str}\n操作人id：{ban_operator_id}\n"
+        "循封原因：" + f"\n{'\n'.join(text_reasons_list)}"
     )
     if img_reasons_list:
         img_msg = MessageSegment.text("\n").join(img_reasons_list)
