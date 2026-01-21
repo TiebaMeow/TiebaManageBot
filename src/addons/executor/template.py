@@ -34,11 +34,14 @@ class DefaultTemplate(BaseModel):
         elif isinstance(self.dto, CommentDTO):
             content_type = "楼中楼"
             if self.dto.floor == 0:
-                comments = await client.get_comments(self.dto.tid, self.dto.pid, is_comment=True)
-                for comment in comments:
-                    if comment.pid == self.dto.cid:
-                        self.dto.floor = comment.floor
-                        break
+                try:
+                    comments = await client.get_comments(self.dto.tid, self.dto.pid, is_comment=True)
+                    for comment in comments:
+                        if comment.pid == self.dto.cid:
+                            self.dto.floor = comment.floor
+                            break
+                except Exception:
+                    pass
         base_message_str += f"触发对象类型：{content_type}"
         base_message = {"type": "text", "data": {"text": base_message_str}}
 
