@@ -34,8 +34,8 @@ from src.utils import (
     handle_post_url,
     handle_thread_url,
     handle_tieba_uid,
-    require_slave_BDUSS,
-    require_STOKEN,
+    require_slave_bduss,
+    require_stoken,
     rule_moderator,
     rule_signed,
 )
@@ -369,7 +369,7 @@ get_last_replier_cmd = on_alconna(
 
 
 @get_last_replier_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def get_last_replier_handle(event: GroupMessageEvent, thread_url: Match[str]):
     thread_id = handle_thread_url(thread_url.result)
     if not thread_id:
@@ -409,7 +409,7 @@ check_ban_cmd = on_alconna(
 
 
 @check_ban_cmd.handle()
-@require_STOKEN
+@require_stoken
 async def check_ban_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:
@@ -444,7 +444,7 @@ check_delete_cmd = on_alconna(
 
 
 @check_delete_cmd.handle()
-@require_STOKEN
+@require_stoken
 async def check_delete_handle(event: GroupMessageEvent, tieba_id_str: Match[str]):
     tieba_id = await handle_tieba_uid(tieba_id_str.result)
     if not tieba_id:

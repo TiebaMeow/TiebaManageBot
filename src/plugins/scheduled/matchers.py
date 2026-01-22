@@ -8,7 +8,7 @@ from nonebot_plugin_alconna import Match, on_alconna
 from src.common.cache import get_appeal_id
 from src.db.crud import get_group
 from src.utils import (
-    require_slave_BDUSS,
+    require_slave_bduss,
     rule_admin,
     rule_moderator,
     rule_reply,
@@ -35,7 +35,7 @@ appeal_switch_cmd = on_alconna(
 
 
 @appeal_switch_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def appeal_switch_handle(event: GroupMessageEvent, args: Arparma):
     try:
         cmd = args.context["$shortcut.regex_match"].group()[1:]
@@ -87,7 +87,7 @@ deal_appeal_cmd = on_alconna(
 
 
 @deal_appeal_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def deal_appeal_handle(event: GroupMessageEvent, reason: Match[str], args: Arparma):
     cmd = args.context["$shortcut.trigger"].split(" ")[0][1:]
     reason_str = reason.result if reason.available else "无"

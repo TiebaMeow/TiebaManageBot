@@ -281,25 +281,25 @@ async def set_bduss(group_id: int, user_id: int | None, cmd: str, value: str | N
                     return "BDUSS无效，请检查输入。"
 
             if user_id == group_info.master:
-                await update_group(group_id, master_BDUSS=value)
+                await update_group(group_id, master_bduss=value)
                 return "吧主BDUSS设置成功。"
             else:
-                await update_group(group_id, slave_BDUSS=value)
+                await update_group(group_id, slave_bduss=value)
                 return "吧务BDUSS设置成功。"
         else:
-            await update_group(group_id, slave_STOKEN=value)
+            await update_group(group_id, slave_stoken=value)
             return "吧务STOKEN设置成功。"
 
     elif "删除" in cmd:
         if "BDUSS" in cmd:
             if user_id == group_info.master:
-                await update_group(group_id, master_BDUSS="")
+                await update_group(group_id, master_bduss="")
                 return "吧主BDUSS删除成功。"
             else:
-                await update_group(group_id, slave_BDUSS="")
+                await update_group(group_id, slave_bduss="")
                 return "吧务BDUSS删除成功。"
         else:
-            await update_group(group_id, slave_STOKEN="")
+            await update_group(group_id, slave_stoken="")
             return "吧务STOKEN删除成功。"
 
     return "未知指令"

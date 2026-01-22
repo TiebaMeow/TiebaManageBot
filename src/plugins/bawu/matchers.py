@@ -11,8 +11,8 @@ from src.utils import (
     handle_thread_url,
     handle_thread_urls,
     handle_tieba_uids,
-    require_master_BDUSS,
-    require_slave_BDUSS,
+    require_master_bduss,
+    require_slave_bduss,
     rule_admin,
     rule_master,
     rule_moderator,
@@ -44,7 +44,7 @@ del_thread_cmd = on_alconna(
 
 
 @del_thread_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def del_thread_handle(
     event: GroupMessageEvent,
     thread_urls: Query[tuple[str, ...]] = AlconnaQuery("thread_urls", ()),
@@ -82,7 +82,7 @@ del_post_cmd = on_alconna(
 
 
 @del_post_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def del_post_handle(
     event: GroupMessageEvent,
     thread_url: Match[str],
@@ -122,7 +122,7 @@ blacklist_cmd = on_alconna(
 
 
 @blacklist_cmd.handle()
-@require_master_BDUSS
+@require_master_bduss
 async def blacklist_handle(
     event: GroupMessageEvent, args: Arparma, user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ())
 ):
@@ -161,7 +161,7 @@ ban_cmd = on_alconna(
 
 
 @ban_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def ban_handle(
     event: GroupMessageEvent,
     days: Match[Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]],
@@ -200,7 +200,7 @@ unban_cmd = on_alconna(
 
 
 @unban_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def unban_handle(event: GroupMessageEvent, user_ids: Query[tuple[str, ...]] = AlconnaQuery("user_ids", ())):
     group_info = await get_group(event.group_id)
     uids = await handle_tieba_uids(user_ids.result)
@@ -234,7 +234,7 @@ good_cmd = on_alconna(
 
 
 @good_cmd.handle()
-@require_master_BDUSS
+@require_master_bduss
 async def good_handle(event: GroupMessageEvent, thread_url: Match[str], args: Arparma):
     cmd = args.context["$shortcut.regex_match"].group()[1:]
     group_info = await get_group(event.group_id)
@@ -277,7 +277,7 @@ move_cmd = on_alconna(
 
 
 @move_cmd.handle()
-@require_master_BDUSS
+@require_master_bduss
 async def move_handle(
     event: GroupMessageEvent, thread_url: Match[str], tab_name: Query[tuple[str, ...]] = AlconnaQuery("tab_name", ())
 ):

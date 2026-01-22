@@ -1,4 +1,4 @@
-from .decorators import require_bduss, require_master_BDUSS, require_slave_BDUSS, require_STOKEN
+from .decorators import require_bduss, require_master_bduss, require_slave_bduss, require_stoken
 from .helpers import (
     get_tieba_user_info,
     get_user_name,
@@ -36,10 +36,10 @@ __all__ = [
     "is_master",
     "is_moderator",
     "render_thread",
-    "require_STOKEN",
+    "require_stoken",
     "require_bduss",
-    "require_master_BDUSS",
-    "require_slave_BDUSS",
+    "require_master_bduss",
+    "require_slave_bduss",
     "rule_admin",
     "rule_master",
     "rule_member",

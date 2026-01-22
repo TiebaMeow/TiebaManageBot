@@ -14,7 +14,7 @@ from src.db.models import GroupInfo, ImgDataModel, TextDataModel
 from src.utils import (
     handle_tieba_uid,
     handle_tieba_uids,
-    require_slave_BDUSS,
+    require_slave_bduss,
     rule_admin,
     rule_master,
     rule_moderator,
@@ -46,7 +46,7 @@ clear_posts_cmd = on_alconna(
 
 
 @clear_posts_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def clear_posts_handle(
     event: GroupMessageEvent, mode: Match[str], tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("tieba_uids", ())
 ):
@@ -111,7 +111,7 @@ add_autoban_cmd = on_alconna(
 
 
 @add_autoban_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def add_autoban_handle(
     event: GroupMessageEvent, state: T_State, tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("tieba_uids", ())
 ):
@@ -296,7 +296,7 @@ remove_autoban_cmd = on_alconna(
 
 
 @remove_autoban_cmd.handle()
-@require_slave_BDUSS
+@require_slave_bduss
 async def remove_autoban_handle(
     event: GroupMessageEvent, tieba_uid_strs: Query[tuple[str, ...]] = AlconnaQuery("tieba_uids", ())
 ):
