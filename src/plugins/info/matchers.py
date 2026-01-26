@@ -20,6 +20,7 @@ from nonebot_plugin_alconna import (
     UniMessage,
     on_alconna,
 )
+from tarina import lang
 
 from src.common.cache import ClientCache, tieba_uid2user_info_cached
 from src.db import ImgDataModel, TextDataModel
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
 
     from src.db.models import GroupInfo
 
+lang.set("alconna", "completion.node", "请继续输入以下参数：", "zh_CN")
 plugin_config = get_plugin_config(Config)
 
 checkout_alc = Alconna(
