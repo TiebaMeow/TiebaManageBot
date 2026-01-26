@@ -1,7 +1,7 @@
 import asyncio
 from typing import TYPE_CHECKING
 
-from arclet.alconna import Alconna, Args, MultiVar
+from arclet.alconna import Alconna, Args, CompSession, MultiVar
 from nonebot import get_plugin_config, on_message
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -20,7 +20,6 @@ from nonebot_plugin_alconna import (
     UniMessage,
     on_alconna,
 )
-from tarina import lang
 
 from src.common.cache import ClientCache, tieba_uid2user_info_cached
 from src.db import ImgDataModel, TextDataModel
@@ -50,7 +49,16 @@ if TYPE_CHECKING:
 
     from src.db.models import GroupInfo
 
-lang.set("alconna", "completion.node", "请继续输入以下参数：", "zh_CN")
+_origin_str = CompSession.__str__
+
+
+def _modified_str(self):
+    raw_text = _origin_str(self)
+    return raw_text.replace("以下是建议的输入：", "请继续输入以下参数：")
+
+
+CompSession.__str__ = _modified_str
+
 plugin_config = get_plugin_config(Config)
 
 checkout_alc = Alconna(
