@@ -7,11 +7,11 @@ from tiebameow.models.dto import CommentDTO, PostDTO, ThreadDTO
 from tiebameow.parser.rule_parser import RuleEngineParser
 from tiebameow.serializer import deserialize
 
-from src.common.cache import ClientCache
+from src.common.cache import ClientCache, set_review_notify_payload
 from src.common.service import ban_user, delete_post_no_record, delete_thread_no_record
 from src.db.crud import get_group_by_fid, get_rule
 
-from .template import AIReviewTemplate, DefaultTemplate
+from .template import AIReviewTemplate, DefaultTemplate, ReviewResultPayload
 
 if TYPE_CHECKING:
     from tiebameow.schemas.rules import ReviewRule
@@ -59,7 +59,7 @@ class Executor:
                 if notified and not (_deleted or _banned):
                     continue
                 await self._handle_notify(
-                    group_info, object_dto, rule, payload.function_call_results, _deleted, _banned
+                    group_info, object_dto, rule, payload.function_call_results, _deleted, _banned, payload
                 )
                 notified = True
 
@@ -105,6 +105,7 @@ class Executor:
         function_call_results: dict[str, Any],
         deleted: bool,
         banned: bool,
+        payload: ReviewResultPayload,
     ) -> None:
         """处理通知操作。
 
@@ -124,4 +125,15 @@ class Executor:
                 rule=rule, dto=object_dto, function_call_results=function_call_results, deleted=deleted, banned=banned
             )
         messages = await template.message()
-        await bot.call_api("send_group_msg", group_id=group_info.group_id, message=messages)
+        resp = await bot.call_api("send_group_msg", group_id=group_info.group_id, message=messages)
+        message_id = resp.get("message_id") if isinstance(resp, dict) else None
+        if message_id:
+            await set_review_notify_payload(
+                int(message_id),
+                {
+                    "group_id": group_info.group_id,
+                    "fid": payload.fid,
+                    "object_type": payload.object_type,
+                    "object_data": payload.object_data,
+                },
+            )

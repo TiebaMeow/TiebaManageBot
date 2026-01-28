@@ -4,6 +4,7 @@ from nonebot import get_driver, get_plugin_config
 
 from logger import log
 
+from . import matchers as matchers
 from .config import Config
 from .consumer import Consumer
 

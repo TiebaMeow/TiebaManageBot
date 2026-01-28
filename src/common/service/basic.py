@@ -163,6 +163,10 @@ async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploade
     Returns:
         是否删除成功
     """
+    try:
+        context = await client.get_posts(tid, rn=1)
+    except Exception:
+        return False
     context = await client.get_posts(tid, rn=1)
     if await client.del_thread(group_info.fid, tid):
         user_info = await client.get_user_info(context.thread.author_id)
@@ -236,7 +240,11 @@ async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int,
     Returns:
         是否删除成功
     """
-    context = await client.get_comments(tid, pid)
+    try:
+        context = await client.get_comments(tid, pid)
+    except Exception:
+        result = await client.del_post(group_info.fid, tid, pid)
+        return bool(result)
     if await client.del_post(group_info.fid, tid, pid):
         user_info = await client.get_user_info(context.post.author_id)
         await add_associated_data(
