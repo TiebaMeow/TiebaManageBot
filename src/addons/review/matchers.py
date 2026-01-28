@@ -384,7 +384,7 @@ async def del_at_handle(
         await service.remove_at_config(group_info.fid, user)
 
     existing_user_strs = [raw_users[user] for user in existing_users]
-    await del_at_cmd.finish(f"已成功删除监控用户：{'，'.join(existing_user_strs)}")
+    await del_at_cmd.finish(f"已成功删除监控艾特：{'，'.join(existing_user_strs)}")
 
 
 set_level_threshold_alc = Alconna(
@@ -455,3 +455,214 @@ async def del_level_threshold_handle(
 
     await service.remove_level_threshold(group_info.fid)
     await del_level_threshold_cmd.finish(f"已删除 {existing_threshold} 级等级墙。")
+
+
+add_ai_review_alc = Alconna("add_ai_review_rule")
+
+add_ai_review_cmd = on_alconna(
+    command=add_ai_review_alc,
+    aliases={"添加AI审查"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@add_ai_review_cmd.handle()
+async def add_ai_review_handle(event: GroupMessageEvent):
+    group_info = await get_group(event.group_id)
+
+    resp = await add_ai_review_cmd.prompt(
+        "请输入AI审查的 system_prompt，输入“默认”使用默认的 system_prompt，输入“取消”以取消操作：", timeout=60
+    )
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_ai_review_cmd.finish("已取消。")
+
+    system_prompt = ""
+    text = resp.extract_plain_text().strip()
+    if text and text != "默认":
+        system_prompt = text
+
+    resp = await add_ai_review_cmd.prompt(
+        '请输入AI返回内容中预期包含的标记字符串，默认值为“"violation": true”，输入“取消”以取消操作：', timeout=60
+    )
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_ai_review_cmd.finish("已取消。")
+    violation_marker = resp.extract_plain_text().strip()
+    if not violation_marker:
+        violation_marker = '"violation": true'
+
+    await service.add_ai_review_config(group_info.fid, system_prompt, violation_marker, event.user_id)
+    await add_ai_review_cmd.finish("已成功添加AI审查规则。")
+
+
+del_ai_review_alc = Alconna("del_ai_review_rule")
+
+del_ai_review_cmd = on_alconna(
+    command=del_ai_review_alc,
+    aliases={"删除AI审查"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_ai_review_cmd.handle()
+async def del_ai_review_handle(event: GroupMessageEvent):
+    group_info = await get_group(event.group_id)
+    await service.remove_ai_review_config(group_info.fid)
+    await del_ai_review_cmd.finish("已删除AI审查规则。")
+
+
+del_rule_alc = Alconna(
+    "del_rule",
+    Args[
+        "rules",
+        MultiVar(str, "+"),
+        Field(completion=lambda: "请输入一个或多个规则ID，以空格分隔。输入“all”删除所有规则。"),
+    ],
+)
+
+del_rule_cmd = on_alconna(
+    command=del_rule_alc,
+    aliases={"删除规则", "移除规则"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@del_rule_cmd.handle()
+async def del_rule_handle(
+    event: GroupMessageEvent,
+    raw_rules: Query[tuple[str, ...]] = AlconnaQuery("rules", ()),
+):
+    group_info = await get_group(event.group_id)
+    rules_input = list(set(raw_rules.result))
+
+    if "all" in rules_input:
+        confirm = await del_rule_cmd.prompt(
+            "您即将删除本吧【所有】审查规则。\n请发送“确认”以继续，发送其他内容取消操作。",
+            timeout=60,
+        )
+        if confirm is None or confirm.extract_plain_text().strip() != "确认":
+            await del_rule_cmd.finish("操作已取消。")
+
+        count = await service.remove_all_rules(group_info.fid)
+        await del_rule_cmd.finish(f"已成功删除本吧所有 {count} 条审查规则。")
+
+    success_ids = []
+    fail_ids = []
+
+    for rule_id_str in rules_input:
+        try:
+            rule_id = int(rule_id_str)
+            if await service.remove_rule_by_id(group_info.fid, rule_id):
+                success_ids.append(rule_id_str)
+            else:
+                fail_ids.append(rule_id_str)
+        except ValueError:
+            fail_ids.append(rule_id_str)
+
+    msg = ""
+    if success_ids:
+        msg += f"已删除规则 ID：{'，'.join(success_ids)}\n"
+    if fail_ids:
+        msg += f"删除失败（不存在或格式错误）：{'，'.join(fail_ids)}"
+
+    await del_rule_cmd.finish(msg.strip())
+
+
+add_rule_alc = Alconna("add_rule")
+
+add_rule_cmd = on_alconna(
+    command=add_rule_alc,
+    aliases={"添加规则"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_admin),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@add_rule_cmd.handle()
+async def add_rule_handle(event: GroupMessageEvent):
+    group_info = await get_group(event.group_id)
+
+    resp = await add_rule_cmd.prompt("请输入规则名称：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    name = resp.extract_plain_text().strip()
+
+    resp = await add_rule_cmd.prompt("请输入触发条件 (CNL/DSL)：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    try:
+        trigger = service.parser.parse_rule(resp.extract_plain_text())
+    except Exception as e:
+        await add_rule_cmd.finish(f"解析触发条件失败：{e}")
+
+    resp = await add_rule_cmd.prompt("请输入执行动作 (CNL/DSL)：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    try:
+        actions = service.parser.parse_actions(resp.extract_plain_text())
+    except Exception as e:
+        await add_rule_cmd.finish(f"解析执行动作失败：{e}")
+
+    resp = await add_rule_cmd.prompt("请输入优先级 (1-20之间的整数)：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    try:
+        priority = int(resp.extract_plain_text().strip())
+    except ValueError:
+        await add_rule_cmd.finish("优先级应为整数。")
+    if priority < 1 or priority > 20:
+        await add_rule_cmd.finish("优先级应在 1 到 20 之间。")
+
+    resp = await add_rule_cmd.prompt("触发该规则是否阻断后续规则？(是/否，默认 是)：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    else:
+        block_text = resp.extract_plain_text().strip().lower()
+        block = block_text not in ("n", "no", "false", "0", "否")
+
+    resp = await add_rule_cmd.prompt("请输入规则生效范围 (主题贴/回复/楼中楼/全部，默认 全部)：", timeout=60)
+    if resp is None or resp.extract_plain_text().strip() == "取消":
+        await add_rule_cmd.finish("已取消。")
+    target_text = resp.extract_plain_text().strip()
+    if target_text in ("主题贴", "thread"):
+        target_type = service.TargetType.THREAD
+    elif target_text in ("回复", "post"):
+        target_type = service.TargetType.POST
+    elif target_text in ("楼中楼", "comment"):
+        target_type = service.TargetType.COMMENT
+    else:
+        target_type = service.TargetType.ALL
+
+    await service.add_custom_rule(
+        group_info.fid,
+        name,
+        trigger,
+        actions,
+        priority,
+        block,
+        event.user_id,
+        target_type,
+    )
+    await add_rule_cmd.finish(f"规则 {name} 添加成功。")

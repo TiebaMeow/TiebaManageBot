@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nonebot import get_bot
 from tiebameow.models.dto import CommentDTO, PostDTO, ThreadDTO
@@ -11,7 +11,7 @@ from src.common.cache import ClientCache
 from src.common.service import ban_user, delete_post_no_record, delete_thread_no_record
 from src.db.crud import get_group_by_fid, get_rule
 
-from .template import DefaultTemplate
+from .template import AIReviewTemplate, DefaultTemplate
 
 if TYPE_CHECKING:
     from tiebameow.schemas.rules import ReviewRule
@@ -58,7 +58,9 @@ class Executor:
             if actions.notify.enabled:
                 if notified and not (_deleted or _banned):
                     continue
-                await self._handle_notify(group_info, object_dto, rule, _deleted, _banned)
+                await self._handle_notify(
+                    group_info, object_dto, rule, payload.function_call_results, _deleted, _banned
+                )
                 notified = True
 
     async def _handle_delete(
@@ -100,6 +102,7 @@ class Executor:
         group_info: GroupInfo,
         object_dto: ThreadDTO | PostDTO | CommentDTO,
         rule: ReviewRule,
+        function_call_results: dict[str, Any],
         deleted: bool,
         banned: bool,
     ) -> None:
@@ -112,11 +115,13 @@ class Executor:
         bot = get_bot()
         notify_config = rule.actions.notify
         template_name = notify_config.template or "default"
-        if template_name == "default":
-            template = DefaultTemplate(rule=rule, dto=object_dto, deleted=deleted, banned=banned)
-            messages = await template.message()
+        if template_name == "ai_review":
+            template = AIReviewTemplate(
+                rule=rule, dto=object_dto, function_call_results=function_call_results, deleted=deleted, banned=banned
+            )
         else:
-            # 未来可扩展更多模板
-            template = DefaultTemplate(rule=rule, dto=object_dto, deleted=deleted, banned=banned)
-            messages = await template.message()
+            template = DefaultTemplate(
+                rule=rule, dto=object_dto, function_call_results=function_call_results, deleted=deleted, banned=banned
+            )
+        messages = await template.message()
         await bot.call_api("send_group_msg", group_id=group_info.group_id, message=messages)

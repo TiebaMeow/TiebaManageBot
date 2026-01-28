@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from tiebameow.models.orm import ReviewRules
 from tiebameow.schemas.rules import ReviewRule, RuleNode, TargetType
 
@@ -19,6 +19,20 @@ async def get_rules(fid: int) -> AsyncGenerator[ReviewRules, None]:
         )
         for record in result.scalars():
             yield record
+
+
+async def get_rule_by_forum_rule_id(fid: int, forum_rule_id: int) -> ReviewRules | None:
+    async with get_session() as session:
+        result = await session.execute(
+            select(ReviewRules).where(ReviewRules.fid == fid, ReviewRules.forum_rule_id == forum_rule_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def get_rule_by_name(fid: int, name: str) -> ReviewRules | None:
+    async with get_session() as session:
+        result = await session.execute(select(ReviewRules).where(ReviewRules.fid == fid, ReviewRules.name == name))
+        return result.scalar_one_or_none()
 
 
 async def get_existing_rule(fid: int, target_type: TargetType, rule: RuleNode) -> ReviewRules | None:
@@ -76,3 +90,10 @@ async def delete_rule(rule_id: int) -> None:
         if rule:
             await session.delete(rule)
             await session.commit()
+
+
+async def delete_rules_by_fid(fid: int) -> int:
+    async with get_session() as session:
+        result = await session.execute(delete(ReviewRules).where(ReviewRules.fid == fid))
+        await session.commit()
+        return result.rowcount  # type: ignore
