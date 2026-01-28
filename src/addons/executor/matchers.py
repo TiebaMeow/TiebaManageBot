@@ -94,7 +94,6 @@ async def handle_review_notify_reply(event: GroupMessageEvent):
 
 review_notify_reaction = on_notice(
     rule=Rule(rule_signed, rule_moderator, rule_reaction),
-    permission=permission.GROUP,
     priority=9,
     block=True,
 )
@@ -115,7 +114,7 @@ async def handle_review_notify_reaction(event: NoticeEvent):
     assert likes is not None
 
     emoji_id = likes[0]["emoji_id"] if isinstance(likes, list) and len(likes) > 0 else None
-    if emoji_id not in (10068, 128074):
+    if emoji_id not in ("10068", "128074"):
         return
 
     payload = await get_review_notify_payload(message_id)
@@ -138,12 +137,12 @@ async def handle_review_notify_reaction(event: NoticeEvent):
         return
 
     client = await ClientCache.get_bawu_client(group_id)
-    if emoji_id == 10068:
+    if emoji_id == "10068":
         checkout_msg, checkout_img = await generate_checkout_msg(client, object_dto.author_id)
         await review_notify_reaction.finish(
             message=MessageSegment.text(checkout_msg) + MessageSegment.image(checkout_img)
         )
-    elif emoji_id == 128074:
+    elif emoji_id == "128074":
         if isinstance(object_dto, ThreadDTO):
             result, err = await delete_thread(client, await get_group(group_id), object_dto.tid, user_id)
         elif isinstance(object_dto, PostDTO):
