@@ -28,8 +28,8 @@ class Template(abc.ABC):
         rule: ReviewRule,
         dto: ThreadDTO | PostDTO | CommentDTO,
         function_call_results: dict[str, Any],
-        deleted: bool,
-        banned: bool,
+        deleted: tuple[bool, str],
+        banned: tuple[bool, str],
     ):
         self.rule = rule
         self.dto = dto
@@ -48,8 +48,8 @@ class DefaultTemplate(Template):
         rule: ReviewRule,
         dto: ThreadDTO | PostDTO | CommentDTO,
         function_call_results: dict[str, Any],
-        deleted: bool,
-        banned: bool,
+        deleted: tuple[bool, str],
+        banned: tuple[bool, str],
     ):
         super().__init__(rule, dto, function_call_results, deleted, banned)
 
@@ -79,13 +79,13 @@ class DefaultTemplate(Template):
 
         suffix_message_str = ""
         if self.rule.actions.delete.enabled:
-            delete_status = "删除 成功" if self.deleted else "删除 失败"
+            delete_status = "删除 成功" if self.deleted[0] else f"删除 失败: {self.deleted[1]}"
             suffix_message_str += f"执行操作：{delete_status}\n"
         if self.rule.actions.ban.enabled:
             ban_status = (
                 f"封禁{self.rule.actions.ban.days}天 成功"
-                if self.banned
-                else f"封禁{self.rule.actions.ban.days}天 失败"
+                if self.banned[0]
+                else f"封禁{self.rule.actions.ban.days}天 失败: {self.banned[1]}"
             )
             suffix_message_str += f"执行操作：{ban_status}\n"
 
@@ -111,8 +111,8 @@ class AIReviewTemplate(Template):
         rule: ReviewRule,
         dto: ThreadDTO | PostDTO | CommentDTO,
         function_call_results: dict[str, Any],
-        deleted: bool,
-        banned: bool,
+        deleted: tuple[bool, str],
+        banned: tuple[bool, str],
     ):
         super().__init__(rule, dto, function_call_results, deleted, banned)
 
@@ -153,13 +153,13 @@ class AIReviewTemplate(Template):
             confidence = ai_result.get("confidence", 0)
             suffix_message_str += f"AI审查输出：[{category}]{reason}\n置信度：{confidence}\n"
         if self.rule.actions.delete.enabled:
-            delete_status = "删除 成功" if self.deleted else "删除 失败"
+            delete_status = "删除 成功" if self.deleted[0] else f"删除 失败: {self.deleted[1]}"
             suffix_message_str += f"执行操作：{delete_status}\n"
         if self.rule.actions.ban.enabled:
             ban_status = (
                 f"封禁{self.rule.actions.ban.days}天 成功"
-                if self.banned
-                else f"封禁{self.rule.actions.ban.days}天 失败"
+                if self.banned[0]
+                else f"封禁{self.rule.actions.ban.days}天 失败: {self.banned[1]}"
             )
             suffix_message_str += f"执行操作：{ban_status}\n"
 

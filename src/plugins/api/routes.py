@@ -72,11 +72,11 @@ async def delete(body: Delete, _: Annotated[str | None, Depends(require_token)])
     bot = get_bot()
     group_info = await get_group(body.group_id)
     client = await ClientCache.get_bawu_client(body.group_id)
-    result = await delete_thread(client, group_info, body.thread_id, uploader_id=body.user_id)
+    result, err = await delete_thread(client, group_info, body.thread_id, uploader_id=body.user_id)
     await bot.call_api(
         "send_group_msg",
         group_id=body.group_id,
-        message=[{"type": "text", "data": {"text": f"{'删除成功' if result else '删除失败'}。"}}],
+        message=[{"type": "text", "data": {"text": f"{'删除成功' if result else f'删除失败：{err}'}。"}}],
     )
     return {"status": "ok"}
 
@@ -87,10 +87,10 @@ async def ban(body: Ban, _: Annotated[str | None, Depends(require_token)]):
     group_info = await get_group(body.group_id)
     client = await ClientCache.get_bawu_client(body.group_id)
     user_info_t = await tieba_uid2user_info_cached(client, body.tieba_uid)
-    result = await ban_user(client, group_info, body.tieba_uid, days=body.days, uploader_id=user_info_t.user_id)
+    result, err = await ban_user(client, group_info, body.tieba_uid, days=body.days, uploader_id=user_info_t.user_id)
     await bot.call_api(
         "send_group_msg",
         group_id=body.group_id,
-        message=[{"type": "text", "data": {"text": f"{'封禁成功' if result else '封禁失败'}。"}}],
+        message=[{"type": "text", "data": {"text": f"{'封禁成功' if result else f'封禁失败：{err}'}。"}}],
     )
     return {"status": "ok"}

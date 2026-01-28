@@ -1,5 +1,5 @@
 from nonebot.adapters import Bot
-from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import FriendRequestEvent, GroupMessageEvent, NoticeEvent
 
 from src.db.crud import get_all_groups, get_group
 
@@ -35,6 +35,17 @@ async def is_moderator(user_id: int, group_id: int) -> bool:
 
 async def rule_reply(event: GroupMessageEvent) -> bool:
     return bool(event.reply)
+
+
+async def rule_reaction(event: NoticeEvent) -> bool:
+    if event.notice_type == "group_msg_emoji_like":
+        if not getattr(event, "is_add", False):
+            return False
+        operator_id = getattr(event, "user_id", None)
+        self_id = getattr(event, "self_id", None)
+        return operator_id != self_id
+
+    return False
 
 
 async def rule_master(event: GroupMessageEvent) -> bool:

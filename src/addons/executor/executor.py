@@ -44,22 +44,22 @@ class Executor:
 
             rule = rule.to_rule_data()
             actions = rule.actions
-            _deleted = False
-            _banned = False
+            _delete_status = (False, "")
+            _ban_status = (False, "")
             if actions.delete.enabled and not deleted:
-                _deleted = await self._handle_delete(group_info, object_dto)
-                if _deleted:
+                _delete_status = await self._handle_delete(group_info, object_dto)
+                if _delete_status[0]:
                     deleted = True
             if actions.ban.enabled and not banned:
                 days = rule.actions.ban.days
-                _banned = await self._handle_ban(group_info, object_dto, days=days)
-                if _banned:
+                _ban_status = await self._handle_ban(group_info, object_dto, days=days)
+                if _ban_status[0]:
                     banned = True
             if actions.notify.enabled:
-                if notified and not (_deleted or _banned):
+                if notified and not (_delete_status[0] or _ban_status[0]):
                     continue
                 await self._handle_notify(
-                    group_info, object_dto, rule, payload.function_call_results, _deleted, _banned, payload
+                    group_info, object_dto, rule, payload.function_call_results, _delete_status, _ban_status, payload
                 )
                 notified = True
 
@@ -67,7 +67,7 @@ class Executor:
         self,
         group_info: GroupInfo,
         object_dto: ThreadDTO | PostDTO | CommentDTO,
-    ) -> bool:
+    ) -> tuple[bool, str]:
         """处理删除操作。
 
         Args:
@@ -76,18 +76,19 @@ class Executor:
         """
         client = await ClientCache.get_bawu_client(group_info.group_id)
         if isinstance(object_dto, ThreadDTO):
-            return await delete_thread_no_record(client, group_info.fid, object_dto.tid)
+            result, err = await delete_thread_no_record(client, group_info.fid, object_dto.tid)
         elif isinstance(object_dto, PostDTO):
-            return await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.pid)
+            result, err = await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.pid)
         elif isinstance(object_dto, CommentDTO):
-            return await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.cid)
+            result, err = await delete_post_no_record(client, group_info.fid, object_dto.tid, object_dto.cid)
+        return result, err
 
     async def _handle_ban(
         self,
         group_info: GroupInfo,
         object_dto: ThreadDTO | PostDTO | CommentDTO,
         days: int = 1,
-    ) -> bool:
+    ) -> tuple[bool, str]:
         """处理封禁操作。
 
         Args:
@@ -95,7 +96,8 @@ class Executor:
             action: 封禁操作的 Action 实例。
         """
         client = await ClientCache.get_bawu_client(group_info.group_id)
-        return await ban_user(client, group_info, object_dto.author_id, days=days, uploader_id=0)
+        result, err = await ban_user(client, group_info, object_dto.author_id, days=days, uploader_id=0)
+        return result, err
 
     async def _handle_notify(
         self,
@@ -103,8 +105,8 @@ class Executor:
         object_dto: ThreadDTO | PostDTO | CommentDTO,
         rule: ReviewRule,
         function_call_results: dict[str, Any],
-        deleted: bool,
-        banned: bool,
+        deleted: tuple[bool, str],
+        banned: tuple[bool, str],
         payload: ReviewResultPayload,
     ) -> None:
         """处理通知操作。
@@ -118,11 +120,19 @@ class Executor:
         template_name = notify_config.template or "default"
         if template_name == "ai_review":
             template = AIReviewTemplate(
-                rule=rule, dto=object_dto, function_call_results=function_call_results, deleted=deleted, banned=banned
+                rule=rule,
+                dto=object_dto,
+                function_call_results=function_call_results,
+                deleted=deleted,
+                banned=banned,
             )
         else:
             template = DefaultTemplate(
-                rule=rule, dto=object_dto, function_call_results=function_call_results, deleted=deleted, banned=banned
+                rule=rule,
+                dto=object_dto,
+                function_call_results=function_call_results,
+                deleted=deleted,
+                banned=banned,
             )
         messages = await template.message()
         resp = await bot.call_api("send_group_msg", group_id=group_info.group_id, message=messages)

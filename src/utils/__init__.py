@@ -19,6 +19,7 @@ from .rules import (
     rule_member,
     rule_moderator,
     rule_owner,
+    rule_reaction,
     rule_reply,
     rule_signed,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "rule_member",
     "rule_moderator",
     "rule_owner",
+    "rule_reaction",
     "rule_reply",
     "rule_signed",
     "text_to_image",

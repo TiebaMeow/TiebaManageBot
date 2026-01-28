@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 
 import httpx
 import nonebot
+from tiebameow.client.tieba_client import RetriableApiError, UnretriableApiError
 
 from src.common.cache import get_tieba_name, get_user_posts_cached, get_user_threads_cached
 from src.db import TextDataModel
@@ -135,7 +136,7 @@ async def generate_checkout_msg(
     return base_content, image_content
 
 
-async def delete_thread_no_record(client: Client, fid: int, tid: int) -> bool:
+async def delete_thread_no_record(client: Client, fid: int, tid: int) -> tuple[bool, str]:
     """
     删贴不记录操作。
 
@@ -147,10 +148,16 @@ async def delete_thread_no_record(client: Client, fid: int, tid: int) -> bool:
     Returns:
         是否删除成功
     """
-    return bool(await client.del_thread(fid, tid))
+    try:
+        await client.del_thread(fid, tid)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
+    except Exception:
+        return False, "未知错误"
+    return True, ""
 
 
-async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploader_id: int) -> bool:
+async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploader_id: int) -> tuple[bool, str]:
     """
     删贴并记录操作。
 
@@ -165,10 +172,19 @@ async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploade
     """
     try:
         context = await client.get_posts(tid, rn=1)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
     except Exception:
-        return False
-    context = await client.get_posts(tid, rn=1)
-    if await client.del_thread(group_info.fid, tid):
+        return False, "未知错误"
+
+    try:
+        result = await client.del_thread(group_info.fid, tid)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
+    except Exception:
+        return False, "未知错误"
+
+    if result:
         user_info = await client.get_user_info(context.thread.author_id)
         await add_associated_data(
             user_info,
@@ -181,8 +197,8 @@ async def delete_thread(client: Client, group_info: GroupInfo, tid: int, uploade
                 )
             ],
         )
-        return True
-    return False
+        return True, ""
+    return False, "未知错误"
 
 
 async def delete_threads(
@@ -203,14 +219,15 @@ async def delete_threads(
     succeeded = []
     failed = []
     for tid in tids:
-        if await delete_thread(client, group_info, tid, uploader_id):
+        success, _ = await delete_thread(client, group_info, tid, uploader_id)
+        if success:
             succeeded.append(tid)
         else:
             failed.append(tid)
     return succeeded, failed
 
 
-async def delete_post_no_record(client: Client, fid: int, tid: int, pid: int) -> bool:
+async def delete_post_no_record(client: Client, fid: int, tid: int, pid: int) -> tuple[bool, str]:
     """
     删回复不记录操作。
 
@@ -223,10 +240,16 @@ async def delete_post_no_record(client: Client, fid: int, tid: int, pid: int) ->
     Returns:
         是否删除成功
     """
-    return bool(await client.del_post(fid, tid, pid))
+    try:
+        await client.del_post(fid, tid, pid)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
+    except Exception:
+        return False, "未知错误"
+    return True, ""
 
 
-async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int, uploader_id: int) -> bool:
+async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int, uploader_id: int) -> tuple[bool, str]:
     """
     删回复并记录操作。
 
@@ -242,10 +265,19 @@ async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int,
     """
     try:
         context = await client.get_comments(tid, pid)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
     except Exception:
+        return False, "未知错误"
+
+    try:
         result = await client.del_post(group_info.fid, tid, pid)
-        return bool(result)
-    if await client.del_post(group_info.fid, tid, pid):
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
+    except Exception:
+        return False, "未知错误"
+
+    if result:
         user_info = await client.get_user_info(context.post.author_id)
         await add_associated_data(
             user_info,
@@ -258,8 +290,8 @@ async def delete_post(client: Client, group_info: GroupInfo, tid: int, pid: int,
                 )
             ],
         )
-        return True
-    return False
+        return True, ""
+    return False, "未知错误"
 
 
 async def delete_posts(
@@ -282,14 +314,17 @@ async def delete_posts(
     failed = []
 
     for pid in pids:
-        if await delete_post(client, group_info, tid, pid, uploader_id):
+        success, _ = await delete_post(client, group_info, tid, pid, uploader_id)
+        if success:
             succeeded.append(pid)
         else:
             failed.append(pid)
     return succeeded, failed, ""
 
 
-async def ban_user(client: Client, group_info: GroupInfo, uid: int | str, days: int, uploader_id: int) -> bool:
+async def ban_user(
+    client: Client, group_info: GroupInfo, uid: int | str, days: int, uploader_id: int
+) -> tuple[bool, str]:
     """
     封禁单个用户并记录操作。
 
@@ -304,7 +339,13 @@ async def ban_user(client: Client, group_info: GroupInfo, uid: int | str, days: 
         是否封禁成功
     """
     user_info = await client.get_user_info(uid)
-    if await client.block(group_info.fid, user_info.portrait, day=days):
+    try:
+        result = await client.block(group_info.fid, user_info.portrait, day=days)
+    except (RetriableApiError, UnretriableApiError) as e:
+        return False, e.msg
+    except Exception:
+        return False, "未知错误"
+    if result:
         await add_associated_data(
             user_info,
             group_info,
@@ -312,8 +353,8 @@ async def ban_user(client: Client, group_info: GroupInfo, uid: int | str, days: 
                 TextDataModel(uploader_id=uploader_id, fid=group_info.fid, text=f"[自动添加]封禁\n封禁天数：{days}")
             ],
         )
-        return True
-    return False
+        return True, ""
+    return False, "未知错误"
 
 
 async def ban_users(
@@ -335,7 +376,8 @@ async def ban_users(
     succeeded = []
     failed = []
     for uid in uids:
-        if await ban_user(client, group_info, uid, days, uploader_id):
+        success, _ = await ban_user(client, group_info, uid, days, uploader_id)
+        if success:
             succeeded.append(uid)
         else:
             failed.append(uid)
