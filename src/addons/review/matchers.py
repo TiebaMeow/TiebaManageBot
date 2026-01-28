@@ -482,7 +482,18 @@ async def add_ai_review_handle(event: GroupMessageEvent):
     if resp is None or resp.extract_plain_text().strip() == "取消":
         await add_ai_review_cmd.finish("已取消。")
 
-    system_prompt = ""
+    system_prompt = (
+        "你是百度贴吧的一名专业内容审核助手。请仔细审查以下用户发布的贴子或回复内容，判断其是否违反社区规范。\n"
+        "主要违规类型包括：攻击歧视、恶意辱骂、带节奏、滑坡唱衰、垃圾广告、违法犯罪等。\n"
+        "请严格只输出标准的 JSON 字符串，不要包含 Markdown 代码块（如 ```json）或其他无关文字。\n"
+        "输出格式要求：\n"
+        "{\n"
+        '  "violation": <Boolean>, // true 表示违规，false 表示合规\n'
+        '  "category": "<String>", // 违规类型（如"攻击歧视"、"广告"），若无违规填"none"\n'
+        '  "reason": "<String>",   // 简要的判断理由\n'
+        '  "confidence": <Float>   // 置信度 (0.0 - 1.0)\n'
+        "}"
+    )
     text = resp.extract_plain_text().strip()
     if text and text != "默认":
         system_prompt = text
