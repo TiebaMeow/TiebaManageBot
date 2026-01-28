@@ -87,6 +87,6 @@ async def handle_review_notify_reply(event: GroupMessageEvent):
         await review_notify_cmd.finish("封禁成功（1天）。" if success else "封禁失败。")
 
     if text in CHECKOUT_KEYWORDS:
-        client = await ClientCache.get_client()
+        client = await ClientCache.get_bawu_client(event.group_id)
         checkout_msg, checkout_img = await generate_checkout_msg(client, object_dto.author_id)
         await review_notify_cmd.finish(message=MessageSegment.text(checkout_msg) + MessageSegment.image(checkout_img))
