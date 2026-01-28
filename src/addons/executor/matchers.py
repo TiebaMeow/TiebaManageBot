@@ -140,7 +140,9 @@ async def handle_review_notify_reaction(event: NoticeEvent):
     if emoji_id == "10068":
         checkout_msg, checkout_img = await generate_checkout_msg(client, object_dto.author_id)
         await review_notify_reaction.finish(
-            message=MessageSegment.text(checkout_msg) + MessageSegment.image(checkout_img)
+            message=MessageSegment.reply(message_id)
+            + MessageSegment.text(checkout_msg)
+            + MessageSegment.image(checkout_img)
         )
     elif emoji_id == "128074":
         if isinstance(object_dto, ThreadDTO):
@@ -151,4 +153,5 @@ async def handle_review_notify_reaction(event: NoticeEvent):
             result, err = await delete_post(client, await get_group(group_id), object_dto.tid, object_dto.cid, user_id)
         else:
             result, err = False, ""
-        await review_notify_reaction.finish("删贴成功。" if result else f"删贴失败：{err}。")
+        result_str = "删贴成功。" if result else f"删贴失败：{err}。"
+        await review_notify_reaction.finish(message=MessageSegment.reply(message_id) + MessageSegment.text(result_str))
