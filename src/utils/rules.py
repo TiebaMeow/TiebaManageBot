@@ -54,21 +54,39 @@ async def rule_master(event: GroupMessageEvent) -> bool:
     return await is_master(event.sender.user_id, event.group_id)
 
 
-async def rule_admin(event: GroupMessageEvent) -> bool:
-    if not event.sender.user_id:
+async def rule_admin(event: GroupMessageEvent | NoticeEvent) -> bool:
+    if isinstance(event, GroupMessageEvent):
+        user_id = event.sender.user_id
+        group_id = event.group_id
+    elif isinstance(event, NoticeEvent):
+        user_id = getattr(event, "user_id", None)
+        group_id = getattr(event, "group_id", None)
+    if not user_id or not group_id:
         return False
-    return await is_admin(event.sender.user_id, event.group_id)
+    return await is_admin(user_id, group_id)
 
 
-async def rule_moderator(event: GroupMessageEvent) -> bool:
-    if not event.sender.user_id:
+async def rule_moderator(event: GroupMessageEvent | NoticeEvent) -> bool:
+    if isinstance(event, GroupMessageEvent):
+        user_id = event.sender.user_id
+        group_id = event.group_id
+    elif isinstance(event, NoticeEvent):
+        user_id = getattr(event, "user_id", None)
+        group_id = getattr(event, "group_id", None)
+    if not user_id or not group_id:
         return False
-    return await is_moderator(event.sender.user_id, event.group_id)
+    return await is_moderator(user_id, group_id)
 
 
-async def rule_signed(event: GroupMessageEvent) -> bool:
+async def rule_signed(event: GroupMessageEvent | NoticeEvent) -> bool:
+    if isinstance(event, GroupMessageEvent):
+        group_id = event.group_id
+    elif isinstance(event, NoticeEvent):
+        group_id = getattr(event, "group_id", None)
+        if not group_id:
+            return False
     try:
-        _ = await get_group(event.group_id)
+        _ = await get_group(group_id)
         return True
     except KeyError:
         return False
