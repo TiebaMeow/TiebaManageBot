@@ -243,8 +243,7 @@ async def add_ai_review_config(fid: int, system_prompt: str, marker: str, upload
     actions = Actions(
         notify=NotifyAction(
             enabled=True,
-            template="default",
-            params={"template": "ai_review"},
+            template="ai_review",
         )
     )
 

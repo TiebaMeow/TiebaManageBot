@@ -488,15 +488,16 @@ async def add_ai_review_handle(event: GroupMessageEvent):
         system_prompt = text
 
     resp = await add_ai_review_cmd.prompt(
-        '请输入AI返回内容中预期包含的标记字符串，默认值为“"violation": true”，输入“取消”以取消操作：', timeout=60
+        '请输入AI返回内容中预期包含的标记字符串，输入“默认”使用默认的“"violation": true”，输入“取消”以取消操作：',
+        timeout=60,
     )
     if resp is None or resp.extract_plain_text().strip() == "取消":
         await add_ai_review_cmd.finish("已取消。")
-    violation_marker = resp.extract_plain_text().strip()
-    if not violation_marker:
-        violation_marker = '"violation": true'
+    marker = resp.extract_plain_text().strip()
+    if not marker or marker == "默认":
+        marker = '"violation": true'
 
-    await service.add_ai_review_config(group_info.fid, system_prompt, violation_marker, event.user_id)
+    await service.add_ai_review_config(group_info.fid, system_prompt, marker, event.user_id)
     await add_ai_review_cmd.finish("已成功添加AI审查规则。")
 
 
