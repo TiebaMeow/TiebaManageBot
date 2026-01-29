@@ -324,7 +324,7 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
     if not group_info.slave_bduss:
         return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="未配置吧务BDUSS")
 
-    client = await ClientCache.get_bawu_client(group_id)
+    client = await ClientCache.get_stoken_client(group_id)
     since = now - timedelta(days=7)
 
     try:
