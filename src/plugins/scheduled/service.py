@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import time
+from datetime import timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
 from logger import log
-from src.common.cache import ClientCache, get_tieba_name
+from src.common.cache import ClientCache, add_autoban_record, get_tieba_name, trim_autoban_records
 from src.common.cache.appeal import del_appeal_id, get_appeals, set_appeal_id, set_appeals
 from src.db import TextDataModel
 from src.db.crud import (
@@ -16,6 +17,7 @@ from src.db.crud import (
     update_autoban,
     update_group,
 )
+from src.db.models import now_with_tz
 
 if TYPE_CHECKING:
     from aiotieba.api.get_unblock_appeals._classdef import Appeal
@@ -34,6 +36,7 @@ async def run_autoban() -> None:
         group_info = await get_group(forum.group_id)
 
         failed = []
+        success_count = 0
         log.info(f"Ready to autoban in {group_info.fname}")
         client = await ClientCache.get_bawu_client(group_info.group_id)
         async for portrait in get_autoban_lists(forum.fid):
@@ -41,10 +44,15 @@ async def run_autoban() -> None:
                 result = await client.block(group_info.fid, portrait, day=10)
                 if not result:
                     failed.append(portrait)
+                else:
+                    success_count += 1
             except Exception as e:
                 log.error(f"Error autobanning user {portrait} in {group_info.fname}: {e}")
                 failed.append(portrait)
         await update_autoban(group_info.fid, group_info.group_id)
+        if success_count:
+            await add_autoban_record(group_info.fid, success_count)
+            await trim_autoban_records(group_info.fid, now_with_tz() - timedelta(days=10))
         if failed:
             log.warning(f"Failed to ban users: {', '.join(failed)} in {await get_tieba_name(group_info.fid)}")
     log.info("Autoban task finished.")
