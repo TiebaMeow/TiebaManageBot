@@ -313,7 +313,7 @@ def _render_wordcloud(tokens: list[str]) -> bytes:
 
 
 async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOpsStats:
-    labels = [(now - timedelta(days=6 - i)).strftime("%m-%d") for i in range(7)]
+    labels = [(now - timedelta(days=7 - i)).strftime("%m-%d") for i in range(7)]
     delete_counts = [0] * 7
     ban_counts = [0] * 7
     ban_excluded = 0
@@ -327,7 +327,7 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
 
     try:
         for i in range(7):
-            day_start = (now - timedelta(days=6 - i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_start = (now - timedelta(days=7 - i)).replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
 
             user_logs = await client.get_bawu_userlogs(fid, pn=1, start_dt=day_start, end_dt=day_end, op_type=213)
@@ -354,8 +354,8 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
         if not record_time or record_time < since:
             continue
         index = (now.date() - record_time.astimezone(SHANGHAI_TZ).date()).days
-        if 0 <= index < 7:
-            exclude_by_day[6 - index] += int(record.get("count", 0))
+        if 1 <= index <= 7:
+            exclude_by_day[7 - index] += int(record.get("count", 0))
 
     ban_excluded = sum(exclude_by_day)
     if ban_excluded:
