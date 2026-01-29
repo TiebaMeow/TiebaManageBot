@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -25,8 +24,6 @@ from src.db.crud import get_group, update_group
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from aiotieba.api.get_bawu_postlogs._classdef import Postlog
-    from aiotieba.api.get_bawu_userlogs._classdef import Userlog
     from matplotlib.figure import Figure
 
     from src.db.models import GroupInfo
@@ -329,67 +326,22 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
     since = now - timedelta(days=7)
 
     try:
-        user_logs_all: list[Userlog] = []
-        post_logs_all: list[Postlog] = []
+        for i in range(7):
+            day_start = (now - timedelta(days=6 - i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
 
-        user_logs_first = await client.get_bawu_userlogs(fid, pn=1, start_dt=since, end_dt=now, op_type=213)
-        if user_logs_first.err:
-            return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
-        if user_logs_first.objs:
-            user_logs_all.extend(user_logs_first.objs)
+            user_logs = await client.get_bawu_userlogs(fid, pn=1, start_dt=day_start, end_dt=day_end, op_type=213)
+            if user_logs.err:
+                return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
+            ban_counts[i] = int(getattr(user_logs.page, "total_count", 0))
 
-        user_total_page = user_logs_first.page.total_page
-        if user_total_page > 1:
-            tasks = [
-                client.get_bawu_userlogs(fid, pn=page, start_dt=since, end_dt=now, op_type=213)
-                for page in range(2, user_total_page + 1)
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, BaseException) or result.err:
-                    return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
-                if result.objs:
-                    user_logs_all.extend(result.objs)
-
-        post_logs_first = await client.get_bawu_postlogs(fid, pn=1, start_dt=since, end_dt=now, op_type=12)
-        if post_logs_first.err:
-            return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
-        if post_logs_first.objs:
-            post_logs_all.extend(post_logs_first.objs)
-
-        post_total_page = post_logs_first.page.total_page
-        if post_total_page > 1:
-            tasks = [
-                client.get_bawu_postlogs(fid, pn=page, start_dt=since, end_dt=now, op_type=12)
-                for page in range(2, post_total_page + 1)
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, BaseException) or result.err:
-                    return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
-                if result.objs:
-                    post_logs_all.extend(result.objs)
+            post_logs = await client.get_bawu_postlogs(fid, pn=1, start_dt=day_start, end_dt=day_end, op_type=12)
+            if post_logs.err:
+                return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
+            delete_counts[i] = int(getattr(post_logs.page, "total_count", 0))
     except BaseException as exc:
         log.error(f"Failed to get bawu logs: {exc}")
         return BawuOpsStats(labels, delete_counts, ban_counts, ban_excluded, error="吧务日志拉取失败")
-
-    for info in user_logs_all:
-        if not info.op_time or info.op_time < since:
-            continue
-        op_type = str(info.op_type or "")
-        if "封禁" in op_type and "解" not in op_type:
-            index = (now.date() - info.op_time.astimezone(SHANGHAI_TZ).date()).days
-            if 0 <= index < 7:
-                ban_counts[6 - index] += 1
-
-    for info in post_logs_all:
-        if not info.op_time or info.op_time < since:
-            continue
-        op_type = str(info.op_type or "")
-        if "删" in op_type and "恢复" not in op_type:
-            index = (now.date() - info.op_time.astimezone(SHANGHAI_TZ).date()).days
-            if 0 <= index < 7:
-                delete_counts[6 - index] += 1
 
     autoban_records = await get_autoban_records(fid)
     exclude_by_day = [0] * 7
