@@ -166,34 +166,36 @@ class ClientCache:
                 await client.__aexit__()
             cls._master_clients = None
 
+        await in_memory_cache.close()
+
 
 async def tieba_uid2user_info_cached(client: Client, tieba_uid: int) -> UserInfo_TUid:
     key = f"tieba_uid2user_info_cached:{tieba_uid}"
-    if ret := in_memory_cache.get(key):
+    if ret := await in_memory_cache.get(key):
         return ret
     try:
         ret = await client.tieba_uid2user_info(tieba_uid)
     except Exception:
         return UserInfo_TUid()
-    in_memory_cache.set(key, ret, ttl=300)
+    await in_memory_cache.set(key, ret, ttl=300)
     return ret
 
 
 async def get_user_threads_cached(client: Client, user_id: int, pn: int) -> UserThreads:
     key = f"get_user_threads_cached:{user_id}:{pn}"
-    if ret := in_memory_cache.get(key):
+    if ret := await in_memory_cache.get(key):
         return ret
     ret = await client.get_user_threads(user_id, pn=pn)
-    in_memory_cache.set(key, ret, ttl=180)
+    await in_memory_cache.set(key, ret, ttl=180)
     return ret
 
 
 async def get_user_posts_cached(client: Client, user_id: int, pn: int, rn: int) -> UserPostss:
     key = f"get_user_posts_cached:{user_id}:{pn}:{rn}"
-    if ret := in_memory_cache.get(key):
+    if ret := await in_memory_cache.get(key):
         return ret
     ret = await client.get_user_posts(user_id, pn=pn, rn=rn)
-    in_memory_cache.set(key, ret, ttl=180)
+    await in_memory_cache.set(key, ret, ttl=180)
     return ret
 
 
