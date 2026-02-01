@@ -9,8 +9,12 @@ from urllib.request import urlopen
 
 import jieba_next as jieba
 import matplotlib as mpl
+
+# 必须在导入 pyplot 之前设置 backend，防止内存泄漏和 GUI 错误
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+from matplotlib.figure import Figure
 from sqlalchemy import func, literal, select, union_all
 from tiebameow.models.orm import Comment, Post, Thread
 from tiebameow.utils.time_utils import SHANGHAI_TZ, now_with_tz
@@ -23,8 +27,6 @@ from src.db.crud import get_group, update_group
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    from matplotlib.figure import Figure
 
     from src.db.models import GroupInfo
 
@@ -60,7 +62,14 @@ async def update_group_args(group_id: int, key: str, value: bool) -> None:
     await update_group(group_id, group_args=group_args)
 
 
+_STOPWORDS_CACHE: set[str] | None = None
+
+
 def _load_stopwords() -> set[str]:
+    global _STOPWORDS_CACHE
+    if _STOPWORDS_CACHE is not None:
+        return _STOPWORDS_CACHE
+
     if not STOPWORDS_PATH.exists():
         STOPWORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
         content = ""
@@ -77,19 +86,23 @@ def _load_stopwords() -> set[str]:
                 return set()
         if content:
             STOPWORDS_PATH.write_text(content, encoding="utf-8")
-    return {line.strip() for line in STOPWORDS_PATH.read_text(encoding="utf-8").splitlines() if line.strip()}
+
+    _STOPWORDS_CACHE = {
+        line.strip() for line in STOPWORDS_PATH.read_text(encoding="utf-8").splitlines() if line.strip()
+    }
+    return _STOPWORDS_CACHE
 
 
 def _fig_to_png(fig: Figure) -> bytes:
     buf = BytesIO()
     fig.tight_layout()
     fig.savefig(buf, format="png", dpi=150)
-    plt.close(fig)
     return buf.getvalue()
 
 
 def _render_empty_image(text: str) -> bytes:
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig = Figure(figsize=(6, 3))
+    ax = fig.add_subplot(111)
     ax.axis("off")
     ax.text(0.5, 0.5, text, ha="center", va="center", fontsize=16)
     return _fig_to_png(fig)
@@ -217,7 +230,8 @@ def _normalize_levels(*level_maps: dict[int, int]) -> list[int]:
 
 
 def _plot_hourly_counts(labels: list[str], last_counts: list[int], prev_counts: list[int]) -> bytes:
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4))
+    ax = fig.add_subplot(111)
     ax.plot(labels, last_counts, marker="o", linewidth=2, label="最近24小时")
     ax.plot(labels, prev_counts, marker="o", linewidth=2, label="上一轮24小时")
     ax.set_title("24小时发贴量（对比）")
@@ -230,7 +244,8 @@ def _plot_hourly_counts(labels: list[str], last_counts: list[int], prev_counts: 
 
 
 def _plot_daily_counts(labels: list[str], counts: list[int]) -> bytes:
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4))
+    ax = fig.add_subplot(111)
     ax.plot(labels, counts, marker="o", linewidth=2, color="#4e79a7")
     ax.set_title("近30天每日发贴量")
     ax.set_xlabel("日期")
@@ -246,7 +261,8 @@ def _plot_level_distribution(
     user_counts: list[int],
     title: str,
 ) -> bytes:
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    fig = Figure(figsize=(10, 4))
+    axes = fig.subplots(1, 2)
     axes[0].bar(levels, total_counts, color="#59a14f")
     axes[0].set_title(f"{title}（贴子）")
     axes[0].set_xlabel("等级")
@@ -263,7 +279,8 @@ def _plot_level_distribution(
 
 
 def _plot_bawu_ops(stats: BawuOpsStats) -> bytes:
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4))
+    ax = fig.add_subplot(111)
     ax.plot(stats.labels, stats.delete_counts, marker="o", linewidth=2, label="删贴")
     ax.plot(stats.labels, stats.ban_counts, marker="o", linewidth=2, label="封禁")
     ax.set_title("近7天吧务操作量")
