@@ -99,5 +99,7 @@ query_force_del_cmd = on_alconna(
 @query_force_del_cmd.handle()
 async def query_force_del_handle(thread_url: Match[str]):
     tid = handle_thread_url(thread_url.result)
+    if tid == 0:
+        await query_force_del_cmd.finish("无效的贴子链接。")
     status = service.get_task_info(tid)
     await query_force_del_cmd.finish(f"贴子 {tid} 的状态：{status}")
