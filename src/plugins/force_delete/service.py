@@ -137,8 +137,7 @@ async def send_feedback(task_info: TaskInfo, message: str):
         logger.error(f"[ForceDelete] 发送反馈消息失败: {e}")
 
 
-ALLOW_CODES = set(ErrorHandler.RETRIABLE_CODES)
-ALLOW_CODES.add(224009)
+ALLOW_CODES = frozenset((*ErrorHandler.RETRIABLE_CODES, 224009))
 
 
 async def _worker_loop():
