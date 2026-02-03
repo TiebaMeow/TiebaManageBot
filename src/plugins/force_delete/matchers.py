@@ -16,12 +16,12 @@ from . import service
 # 1. 删锁/保护/热门帖
 force_del_alc = Alconna(
     "force_del",
-    Args["thread_url", str, Field(completion=lambda: "请输入贴子链接")],
+    Args["thread_url", str, Field(completion=lambda: "请输入帖链接")],
 )
 
 force_del_cmd = on_alconna(
     command=force_del_alc,
-    aliases={"删锁帖", "删保护帖", "删热门帖"},
+    aliases={"删锁帖", "删保护帖", "删热门帖", "删锁贴", "删保护贴", "删热门贴"},
     comp_config={"lite": True},
     use_cmd_start=True,
     use_cmd_sep=True,
@@ -39,7 +39,7 @@ async def force_del_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match
     tid = handle_thread_url(thread_url.result)
 
     if tid == 0:
-        await force_del_cmd.finish("无效的贴子链接。")
+        await force_del_cmd.finish("无效的帖子链接。")
 
     if err_msg := await service.check_thread_status(group_info, tid):
         await force_del_cmd.finish(f"删帖任务添加失败: {err_msg}")
@@ -51,12 +51,12 @@ async def force_del_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match
 # 2. 取消任务
 cancel_force_del_alc = Alconna(
     "cancel_force_del",
-    Args["thread_url", str, Field(completion=lambda: "请输入贴子链接")],
+    Args["thread_url", str, Field(completion=lambda: "请输入帖子链接")],
 )
 
 cancel_force_del_cmd = on_alconna(
     command=cancel_force_del_alc,
-    aliases={"取消删锁帖", "取消删保护帖", "取消删热门帖"},
+    aliases={"取消删锁帖", "取消删保护帖", "取消删热门帖", "取消删锁贴", "取消删保护贴", "取消删热门贴"},
     comp_config={"lite": True},
     use_cmd_start=True,
     use_cmd_sep=True,
@@ -71,7 +71,7 @@ cancel_force_del_cmd = on_alconna(
 async def cancel_force_del_handle(thread_url: Match[str]):
     tid = handle_thread_url(thread_url.result)
     if tid == 0:
-        await cancel_force_del_cmd.finish("无效的贴子链接。")
+        await cancel_force_del_cmd.finish("无效的帖子链接。")
 
     msg = await service.cancel_task(tid)
     await cancel_force_del_cmd.finish(msg)
@@ -80,12 +80,12 @@ async def cancel_force_del_handle(thread_url: Match[str]):
 # 3. 查询任务
 query_force_del_alc = Alconna(
     "query_force_del",
-    Args["thread_url", str, Field(completion=lambda: "请输入贴子链接")],
+    Args["thread_url", str, Field(completion=lambda: "请输入帖子链接")],
 )
 
 query_force_del_cmd = on_alconna(
     command=query_force_del_alc,
-    aliases={"查询删锁帖", "查询删保护帖", "查询删热门帖"},
+    aliases={"查询删锁帖", "查询删保护帖", "查询删热门帖", "查询删锁贴", "查询删保护贴", "查询删热门贴"},
     comp_config={"lite": True},
     use_cmd_start=True,
     use_cmd_sep=True,
@@ -100,6 +100,6 @@ query_force_del_cmd = on_alconna(
 async def query_force_del_handle(thread_url: Match[str]):
     tid = handle_thread_url(thread_url.result)
     if tid == 0:
-        await query_force_del_cmd.finish("无效的贴子链接。")
+        await query_force_del_cmd.finish("无效的帖子链接。")
     status = service.get_task_info(tid)
-    await query_force_del_cmd.finish(f"贴子 {tid} 的状态：{status}")
+    await query_force_del_cmd.finish(f"帖子 {tid} 的状态：{status}")
