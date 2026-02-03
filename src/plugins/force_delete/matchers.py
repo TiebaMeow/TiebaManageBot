@@ -85,7 +85,7 @@ query_force_del_alc = Alconna(
 
 query_force_del_cmd = on_alconna(
     command=query_force_del_alc,
-    aliases={"查询删锁帖", "查询删保护帖", "查询删热门帖", "查询删锁贴", "查询删保护贴", "查询删热门贴"},
+    aliases={"查删锁帖", "查删保护帖", "查删热门帖", "查删锁贴", "查删保护贴", "查删热门贴"},
     comp_config={"lite": True},
     use_cmd_start=True,
     use_cmd_sep=True,
