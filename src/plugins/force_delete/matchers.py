@@ -68,12 +68,12 @@ cancel_force_del_cmd = on_alconna(
 
 
 @cancel_force_del_cmd.handle()
-async def cancel_force_del_handle(thread_url: Match[str]):
+async def cancel_force_del_handle(thread_url: Match[str], event: GroupMessageEvent):
     tid = handle_thread_url(thread_url.result)
     if tid == 0:
         await cancel_force_del_cmd.finish("无效的帖子链接。")
 
-    msg = await service.cancel_task(tid)
+    msg = await service.cancel_task(event.group_id, tid)
     await cancel_force_del_cmd.finish(msg)
 
 
@@ -97,9 +97,9 @@ query_force_del_cmd = on_alconna(
 
 
 @query_force_del_cmd.handle()
-async def query_force_del_handle(thread_url: Match[str]):
+async def query_force_del_handle(thread_url: Match[str], event: GroupMessageEvent):
     tid = handle_thread_url(thread_url.result)
     if tid == 0:
         await query_force_del_cmd.finish("无效的帖子链接。")
-    status = service.get_task_info(tid)
+    status = service.get_task_info(event.group_id, tid)
     await query_force_del_cmd.finish(f"帖子 {tid} 的状态：{status}")
