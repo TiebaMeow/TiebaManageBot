@@ -13,7 +13,7 @@ from src.common.cache import (
     add_force_delete_record,
     get_all_force_delete_records,
     remove_force_delete_record,
-    update_force_delete_record,
+    save_force_delete_records,
 )
 
 from .config import config
@@ -79,17 +79,24 @@ async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int
     return f"已启动强制删帖任务 tid={tid}，将在后台持续尝试删除{config.force_delete_max_duration}分钟。"
 
 
-async def cancel_task(tid: int) -> str:
-    """取消任务"""
+async def remove_task(tid: int) -> bool:
+    """移除任务"""
     async with _lock:
         if tid in _active_tasks:
             del _active_tasks[tid]
             await remove_force_delete_record(tid)
-            return f"已取消对帖子 tid={tid} 的强制删除任务。"
+            return True
 
-    # 尝试清理持久化缓存（防止僵尸记录）
-    await remove_force_delete_record(tid)
-    return f"未找到帖子 tid={tid} 的进行中任务。"
+    return False
+
+
+async def cancel_task(tid: int) -> str:
+    """取消任务"""
+    if await remove_task(tid):
+        return f"已取消对帖子 tid={tid} 的强制删除任务。"
+    else:
+        await remove_force_delete_record(tid)
+        return f"未找到帖子 tid={tid} 的进行中任务。"
 
 
 def get_task_info(tid: int) -> str:
@@ -124,6 +131,12 @@ async def restore_tasks():
         _ensure_worker_running()
 
 
+async def save_active_tasks():
+    """系统关闭时保存当前的活动任务"""
+    async with _lock:
+        await save_force_delete_records(_active_tasks)
+
+
 def _ensure_worker_running():
     global _worker_task
     if _worker_task is None or _worker_task.done():
@@ -154,112 +167,62 @@ ALLOW_CODES = frozenset((*ErrorHandler.RETRIABLE_CODES, 224009)) - {300000}
 
 async def _worker_loop():
     """单任务循环执行器"""
+
     logger.debug("[ForceDelete] Worker 启动")
 
-    while True:
+    while _active_tasks:
         try:
-            # 1. 控制 RPS
-            sleep_time = 1.0 / max(1, config.force_delete_rps)
-            await asyncio.sleep(sleep_time)
-
-            async with _lock:
-                if not _active_tasks:
+            for thread_id, task_info in _active_tasks.copy().items():
+                if thread_id not in _active_tasks:
                     continue
 
-                # 获取当前时间用于检查过期
                 now = time.time()
-                tids_to_remove = []
-
-                # 简单轮询：这里每次循环只取一个任务执行
-                # 为了简单起见，这里将其转换为列表取第一个，或者可以维护一个队列
-                # 考虑到 active_tasks 可能变化，转 list 虽然有开销但在任务量不大时可接受
-                # 更好的方式可能是使用 cycle iterator，但在 dict 变化时可能会有问题
-
-                # 这里采用：随机选一个或者按顺序选一个（dict顺序）
-                # 实际每次只处理一个任务
-                current_tid = next(iter(_active_tasks))
-                task_info = _active_tasks[current_tid]
-
-                # 检查是否过期
-                if now > task_info["expire_time"]:
-                    logger.info(f"[ForceDelete] 任务超时: tid={current_tid}")
-                    tids_to_remove.append(current_tid)
-                else:
-                    # 执行删除逻辑需要释放锁，避免阻塞 add/cancel
-                    pass
-
-            # 移除过期任务
-            if tids_to_remove:
-                async with _lock:
-                    for tid in tids_to_remove:
-                        if tid in _active_tasks:
-                            del _active_tasks[tid]
-                            await remove_force_delete_record(tid)
-                            await send_feedback(
-                                task_info,
-                                f"强制删帖任务已超时，未能成功删除帖子 {tid}。",
-                            )
-                continue
-
-            # 执行删除
-            try:
-                client = await ClientCache.get_bawu_client(task_info["group_id"])
+                sleep_until = 1.0 / max(1, config.force_delete_rps) + now
                 try:
-                    success = await client.del_thread(task_info["fid"], current_tid)
+                    if now > task_info["expire_time"]:
+                        logger.info(f"[ForceDelete] 任务超时: tid={thread_id}")
+                        await remove_task(thread_id)
+                        await send_feedback(
+                            task_info,
+                            f"强制删帖任务已超时，未能成功删除帖子 {thread_id}。",
+                        )
+                        continue
+
+                    task_info["attempts"] += 1
+                    client = await ClientCache.get_bawu_client(task_info["group_id"])
+                    success = await client.del_thread(task_info["fid"], thread_id)
+
+                    if success:
+                        logger.info(f"[ForceDelete] 删帖成功: tid={thread_id}")
+                        await remove_task(thread_id)
+                        await send_feedback(
+                            task_info,
+                            f"强制删帖任务已成功删除帖子 {thread_id}。",
+                        )
                 except AiotiebaError as e:
-                    success = False
                     if e.code not in ALLOW_CODES:
                         if e.code == 300000:
                             e.msg = "权限不足"
-                        logger.warning(f"[ForceDelete] 删除失败 (tid={current_tid}): {e}")
+                        logger.warning(f"[ForceDelete] 删除失败 (tid={thread_id}): {e}")
+                        await remove_task(thread_id)
                         await send_feedback(
                             task_info,
-                            f"强制删帖任务删除帖子 {current_tid} 时发生错误: {e}，已终止任务。",
+                            f"强制删帖任务删除帖子 {thread_id} 失败: {e}，已终止任务。",
                         )
-                        async with _lock:
-                            await remove_force_delete_record(current_tid)
+                except Exception as e:
+                    logger.error(f"[ForceDelete] 删除任务异常 (tid={thread_id}): {e}")
+                    await remove_task(thread_id)
+                    await send_feedback(
+                        task_info,
+                        f"强制删帖任务删除帖子 {thread_id} 时发生错误: {e}，已终止任务。",
+                    )
 
-                            if current_tid in _active_tasks:
-                                del _active_tasks[current_tid]
-
-                # 更新尝试次数
-                task_info["attempts"] += 1
-                # 只要任务还在 active_tasks 中，就更新缓存（为了重启后能看到次数）
-                if task_info["attempts"] % 10 == 0:
-                    await update_force_delete_record(current_tid, task_info["attempts"])
-
-                if success:
-                    logger.info(f"[ForceDelete] 删帖成功: tid={current_tid}")
-                    async with _lock:
-                        if current_tid in _active_tasks:
-                            del _active_tasks[current_tid]
-                            await remove_force_delete_record(current_tid)
-                            await send_feedback(
-                                task_info,
-                                f"强制删帖任务已成功删除帖子 {current_tid}。",
-                            )
-            except Exception as e:
-                logger.error(f"[ForceDelete] 删除任务异常 (tid={current_tid}): {e}")
-                await send_feedback(
-                    task_info,
-                    f"强制删帖任务删除帖子 {current_tid} 时发生错误: {e}，已终止任务。",
-                )
-                async with _lock:
-                    await remove_force_delete_record(current_tid)
-
-                    if current_tid in _active_tasks:
-                        del _active_tasks[current_tid]
-
-            # 将当前任务移动到字典末尾，实现简单的 Round-Robin
-            async with _lock:
-                if current_tid in _active_tasks:
-                    # pop and re-insert to move to end (Python 3.7+ dicts are ordered)
-                    val = _active_tasks.pop(current_tid)
-                    _active_tasks[current_tid] = val
-
+                await asyncio.sleep(max(0, sleep_until - time.time()))
         except asyncio.CancelledError:
-            logger.info("[ForceDelete] Worker 停止")
+            logger.info("[ForceDelete] Worker 停止，任务被取消")
             break
         except Exception as e:
             logger.error(f"[ForceDelete] Worker 异常: {e}")
             await asyncio.sleep(1)
+    else:
+        logger.info("[ForceDelete] Worker 停止，任务队列为空")

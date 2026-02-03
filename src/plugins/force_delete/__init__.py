@@ -16,3 +16,9 @@ driver = get_driver()
 async def _():
     # 恢复未完成的强制删帖任务
     await service.restore_tasks()
+
+
+@driver.on_shutdown
+async def _():
+    # 保存当前的强制删帖任务
+    await service.save_active_tasks()
