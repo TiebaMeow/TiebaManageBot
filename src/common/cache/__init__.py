@@ -4,7 +4,7 @@ from .force_delete import (
     add_force_delete_record,
     get_all_force_delete_records,
     remove_force_delete_record,
-    update_force_delete_record,
+    save_force_delete_records,
 )
 from .review_notify import get_review_notify_payload, set_review_notify_payload
 from .tieba_client import (
@@ -35,5 +35,5 @@ __all__ = [
     "add_force_delete_record",
     "remove_force_delete_record",
     "get_all_force_delete_records",
-    "update_force_delete_record",
+    "save_force_delete_records",
 ]

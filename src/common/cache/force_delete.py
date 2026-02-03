@@ -41,17 +41,14 @@ async def add_force_delete_record(tid: int, info: TaskInfo) -> None:
     await force_delete_cache.set(KEY, tasks, expire="30d")
 
 
-async def update_force_delete_record(tid: int, attempts: int) -> None:
-    """更新尝试次数"""
-    tasks = await get_all_force_delete_records()
-    if tid in tasks:
-        tasks[tid]["attempts"] = attempts
-        await force_delete_cache.set(KEY, tasks, expire="30d")
-
-
 async def remove_force_delete_record(tid: int) -> None:
     """从持久化缓存移除任务记录"""
     tasks = await get_all_force_delete_records()
     if tid in tasks:
         del tasks[tid]
         await force_delete_cache.set(KEY, tasks, expire="30d")
+
+
+async def save_force_delete_records(tasks: dict[int, TaskInfo]) -> None:
+    """保存所有任务记录到持久化缓存"""
+    await force_delete_cache.set(KEY, tasks, expire="30d")
