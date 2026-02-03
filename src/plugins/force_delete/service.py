@@ -24,9 +24,13 @@ if TYPE_CHECKING:
 
 # 内存中维护的活动任务列表
 # Key: tid, Value: TaskInfo (包含 attempts)
-_active_tasks: dict[int, TaskInfo] = {}
+_active_tasks: dict[str, TaskInfo] = {}
 _worker_task: asyncio.Task | None = None
 _lock = asyncio.Lock()
+
+
+def get_task_id(group_id: int, tid: int) -> str:
+    return f"{group_id}_{tid}"
 
 
 async def check_thread_status(group_info: GroupInfo, tid: int) -> str:
@@ -47,14 +51,15 @@ async def check_thread_status(group_info: GroupInfo, tid: int) -> str:
     except TimeoutError:
         return "获取帖子状态时请求超时"
     except Exception as e:
-        logger.warning(f"[ForceDelete] 检查帖子状态异常 (tid={tid}): {e}")
+        logger.warning(f"[ForceDelete] 检查帖子状态异常 tid={tid}: {e}")
         return f"获取帖子状态时发生错误: {e}"
 
 
 async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int, operator_id: int) -> str:
     """添加任务"""
     async with _lock:
-        if tid in _active_tasks:
+        task_id = get_task_id(group_info.group_id, tid)
+        if task_id in _active_tasks:
             return "该帖子已在强制删除队列中。"
 
         expire_time = time.time() + (config.force_delete_max_duration * 60)
@@ -66,12 +71,12 @@ async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int
             "operator_id": operator_id,
             "expire_time": expire_time,
             "attempts": 0,
+            "thread_id": tid,
         }
-
         # 1. 写入持久化缓存
-        await add_force_delete_record(tid, info)
+        await add_force_delete_record(task_id, info)
         # 2. 更新内存
-        _active_tasks[tid] = info
+        _active_tasks[task_id] = info
 
     # 确保 Worker 运行
     _ensure_worker_running()
@@ -79,33 +84,35 @@ async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int
     return f"已启动强制删帖任务 tid={tid}，将在后台持续尝试删除{config.force_delete_max_duration}分钟。"
 
 
-async def remove_task(tid: int) -> bool:
+async def remove_task(task_id: str) -> bool:
     """移除任务"""
     async with _lock:
-        if tid in _active_tasks:
-            del _active_tasks[tid]
-            await remove_force_delete_record(tid)
+        if task_id in _active_tasks:
+            del _active_tasks[task_id]
+            await remove_force_delete_record(task_id)
             return True
 
     return False
 
 
-async def cancel_task(tid: int) -> str:
+async def cancel_task(group_id: int, tid: int) -> str:
     """取消任务"""
-    if await remove_task(tid):
+    task_id = get_task_id(group_id, tid)
+    if await remove_task(task_id):
         return f"已取消对帖子 tid={tid} 的强制删除任务。"
     else:
-        await remove_force_delete_record(tid)
+        await remove_force_delete_record(task_id)
         return f"未找到帖子 tid={tid} 的进行中任务。"
 
 
-def get_task_info(tid: int) -> str:
+def get_task_info(group_id: int, tid: int) -> str:
     """查询任务状态"""
-    if tid in _active_tasks:
-        attempts = _active_tasks[tid]["attempts"]
+    task_id = get_task_id(group_id, tid)
+    if task_id in _active_tasks:
+        attempts = _active_tasks[task_id]["attempts"]
         return (
             f"进行中，已尝试删除 {attempts} 次，"
-            f"持续到 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_active_tasks[tid]['expire_time']))}。"
+            f"持续到 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_active_tasks[task_id]['expire_time']))}。"
         )
     return "无进行中任务"
 
@@ -118,13 +125,13 @@ async def restore_tasks():
     count = 0
 
     async with _lock:
-        for tid, info in tasks.items():
+        for task_id, info in tasks.items():
             if info["expire_time"] > now:
-                _active_tasks[tid] = info
+                _active_tasks[task_id] = info
                 count += 1
             else:
                 # 清理过期任务
-                await remove_force_delete_record(tid)
+                await remove_force_delete_record(task_id)
 
     if count > 0:
         logger.info(f"[ForceDelete] 已恢复 {count} 个强制删帖任务")
@@ -172,19 +179,21 @@ async def _worker_loop():
 
     while _active_tasks:
         try:
-            for thread_id, task_info in _active_tasks.copy().items():
-                if thread_id not in _active_tasks:
+            for task_id, task_info in _active_tasks.copy().items():
+                if task_id not in _active_tasks:
                     continue
+
+                thread_id = task_info["thread_id"]
 
                 now = time.time()
                 sleep_until = 1.0 / max(1, config.force_delete_rps) + now
                 try:
                     if now > task_info["expire_time"]:
                         logger.info(f"[ForceDelete] 任务超时: tid={thread_id}")
-                        await remove_task(thread_id)
+                        await remove_task(task_id)
                         await send_feedback(
                             task_info,
-                            f"强制删帖任务已超时，未能成功删除帖子 {thread_id}。",
+                            f"强制删帖任务已超时，未能成功删除帖子 tid={thread_id}。",
                         )
                         continue
 
@@ -194,27 +203,27 @@ async def _worker_loop():
 
                     if success:
                         logger.info(f"[ForceDelete] 删帖成功: tid={thread_id}")
-                        await remove_task(thread_id)
+                        await remove_task(task_id)
                         await send_feedback(
                             task_info,
-                            f"强制删帖任务已成功删除帖子 {thread_id}。",
+                            f"强制删帖任务已成功删除帖子 tid={thread_id}。",
                         )
                 except AiotiebaError as e:
                     if e.code not in ALLOW_CODES:
                         if e.code == 300000:
                             e.msg = "权限不足"
-                        logger.warning(f"[ForceDelete] 删除失败 (tid={thread_id}): {e}")
-                        await remove_task(thread_id)
+                        logger.warning(f"[ForceDelete] 删除失败 tid={thread_id}: {e}")
+                        await remove_task(task_id)
                         await send_feedback(
                             task_info,
-                            f"强制删帖任务删除帖子 {thread_id} 失败: {e}，已终止任务。",
+                            f"强制删帖任务删除帖子 tid={thread_id} 失败: {e}，已终止任务。",
                         )
                 except Exception as e:
-                    logger.error(f"[ForceDelete] 删除任务异常 (tid={thread_id}): {e}")
-                    await remove_task(thread_id)
+                    logger.error(f"[ForceDelete] 删除任务异常 tid={thread_id}: {e}")
+                    await remove_task(task_id)
                     await send_feedback(
                         task_info,
-                        f"强制删帖任务删除帖子 {thread_id} 时发生错误: {e}，已终止任务。",
+                        f"强制删帖任务删除帖子 tid={thread_id} 时发生错误: {e}，已终止任务。",
                     )
 
                 await asyncio.sleep(max(0, sleep_until - time.time()))
