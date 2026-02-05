@@ -34,7 +34,14 @@ async def delete_threads(
     for tid in tids:
         posts = await client.get_posts(tid)
         user_info = await client.get_user_info(posts.thread.author_id)
-        if await client.del_thread(group_info.fid, tid):
+
+        if posts.thread.type == 40:
+            # 视频贴，需要调用del_post接口删除
+            del_coro = client.del_post(group_info.fid, tid, posts.thread.pid)
+        else:
+            del_coro = client.del_thread(group_info.fid, tid)
+
+        if await del_coro:
             succeeded.append(tid)
             await add_associated_data(
                 user_info,
