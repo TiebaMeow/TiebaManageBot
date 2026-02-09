@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -29,8 +30,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from src.db.models import GroupInfo
-
-mpl.use("Agg")
 
 REPORT_SUB_KEY = "daily_report_sub"
 
@@ -232,8 +231,14 @@ def _normalize_levels(*level_maps: dict[int, int]) -> list[int]:
 def _plot_hourly_counts(labels: list[str], last_counts: list[int], prev_counts: list[int]) -> bytes:
     fig = Figure(figsize=(10, 4))
     ax = fig.add_subplot(111)
-    ax.plot(labels, last_counts, marker="o", linewidth=2, label="最近24小时")
-    ax.plot(labels, prev_counts, marker="o", linewidth=2, label="上一轮24小时")
+    x_positions = list(range(len(labels)))
+    ax.plot(x_positions, last_counts, marker="o", linewidth=2, label="最近24小时")
+    ax.plot(x_positions, prev_counts, marker="o", linewidth=2, label="上一轮24小时")
+    for x_pos, val in zip(x_positions, last_counts, strict=True):
+        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+    for x_pos, val in zip(x_positions, prev_counts, strict=True):
+        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, -10), ha="center", fontsize=8)
+    ax.set_xticks(x_positions, labels)
     ax.set_title("24小时发贴量（对比）")
     ax.set_xlabel("小时")
     ax.set_ylabel("发贴量")
@@ -246,7 +251,11 @@ def _plot_hourly_counts(labels: list[str], last_counts: list[int], prev_counts: 
 def _plot_daily_counts(labels: list[str], counts: list[int]) -> bytes:
     fig = Figure(figsize=(10, 4))
     ax = fig.add_subplot(111)
-    ax.plot(labels, counts, marker="o", linewidth=2, color="#4e79a7")
+    x_positions = list(range(len(labels)))
+    ax.plot(x_positions, counts, marker="o", linewidth=2, color="#4e79a7")
+    for x_pos, val in zip(x_positions, counts, strict=True):
+        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+    ax.set_xticks(x_positions, labels)
     ax.set_title("近30天每日发贴量")
     ax.set_xlabel("日期")
     ax.set_ylabel("发贴量")
@@ -263,17 +272,37 @@ def _plot_level_distribution(
 ) -> bytes:
     fig = Figure(figsize=(10, 4))
     axes = fig.subplots(1, 2)
-    axes[0].bar(levels, total_counts, color="#59a14f")
+    bars_total = axes[0].bar(levels, total_counts, color="#59a14f")
     axes[0].set_title(f"{title}（贴子）")
     axes[0].set_xlabel("等级")
     axes[0].set_ylabel("数量")
     axes[0].grid(True, axis="y", alpha=0.3)
+    for bar in bars_total:
+        height = bar.get_height()
+        axes[0].text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            str(int(height)),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
 
-    axes[1].bar(levels, user_counts, color="#edc949")
+    bars_user = axes[1].bar(levels, user_counts, color="#edc949")
     axes[1].set_title(f"{title}（用户去重）")
     axes[1].set_xlabel("等级")
     axes[1].set_ylabel("用户数")
     axes[1].grid(True, axis="y", alpha=0.3)
+    for bar in bars_user:
+        height = bar.get_height()
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            str(int(height)),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
 
     return _fig_to_png(fig)
 
@@ -281,8 +310,14 @@ def _plot_level_distribution(
 def _plot_bawu_ops(stats: BawuOpsStats) -> bytes:
     fig = Figure(figsize=(10, 4))
     ax = fig.add_subplot(111)
-    ax.plot(stats.labels, stats.delete_counts, marker="o", linewidth=2, label="删贴")
-    ax.plot(stats.labels, stats.ban_counts, marker="o", linewidth=2, label="封禁")
+    x_positions = list(range(len(stats.labels)))
+    ax.plot(x_positions, stats.delete_counts, marker="o", linewidth=2, label="删贴")
+    ax.plot(x_positions, stats.ban_counts, marker="o", linewidth=2, label="封禁")
+    for x_pos, val in zip(x_positions, stats.delete_counts, strict=True):
+        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+    for x_pos, val in zip(x_positions, stats.ban_counts, strict=True):
+        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, -10), ha="center", fontsize=8)
+    ax.set_xticks(x_positions, stats.labels)
     ax.set_title("近7天吧务操作量")
     ax.set_xlabel("日期")
     ax.set_ylabel("操作量")
@@ -416,30 +451,32 @@ async def build_daily_report(group_info: GroupInfo) -> tuple[str, list[bytes]]:
 
     images: list[bytes] = []
     images.extend((
-        _plot_hourly_counts(labels_hour, last_counts, prev_counts),
-        _plot_daily_counts(labels_day, daily_counts),
+        await asyncio.to_thread(_plot_hourly_counts, labels_hour, last_counts, prev_counts),
+        await asyncio.to_thread(_plot_daily_counts, labels_day, daily_counts),
     ))
 
     if levels_24:
-        images.append(_plot_level_distribution(levels_24, total_24, users_24, "近24小时等级分布"))
+        images.append(
+            await asyncio.to_thread(_plot_level_distribution, levels_24, total_24, users_24, "近24小时等级分布")
+        )
     else:
-        images.append(_render_empty_image("近24小时无等级数据"))
+        images.append(await asyncio.to_thread(_render_empty_image, "近24小时无等级数据"))
 
     if levels_7:
-        images.append(_plot_level_distribution(levels_7, total_7, users_7, "近7天等级分布"))
+        images.append(await asyncio.to_thread(_plot_level_distribution, levels_7, total_7, users_7, "近7天等级分布"))
     else:
-        images.append(_render_empty_image("近7天无等级数据"))
+        images.append(await asyncio.to_thread(_render_empty_image, "近7天无等级数据"))
 
     bawu_stats = await _get_bawu_ops_stats(group_info.group_id, group_info.fid, now)
-    images.append(_plot_bawu_ops(bawu_stats))
+    images.append(await asyncio.to_thread(_plot_bawu_ops, bawu_stats))
 
     content_query = _content_text_query(group_info.fid, start_24h, now)
     stmt_text = select(content_query.c.text).order_by(content_query.c.ctime.desc()).limit(5000)
     async with get_addon_session() as session:
         texts = [row.text for row in (await session.execute(stmt_text)).all() if row.text]
 
-    tokens = _tokenize_texts(texts)
-    images.append(_render_wordcloud(tokens))
+    tokens = await asyncio.to_thread(_tokenize_texts, texts)
+    images.append(await asyncio.to_thread(_render_wordcloud, tokens))
 
     header = f"【本吧日报】{group_info.fname}吧\n统计时间：{now.strftime('%Y-%m-%d')}"
     if bawu_stats.error:

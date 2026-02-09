@@ -6,6 +6,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import on_alconna
 
+from logger import log
 from src.db.crud import get_group
 from src.utils import rule_admin, rule_moderator, rule_signed
 
@@ -71,10 +72,15 @@ async def daily_report_unsub_handle(event: GroupMessageEvent):
 @daily_report_push_cmd.handle()
 async def daily_report_push_handle(event: GroupMessageEvent):
     bot = get_bot()
-    group_info = await get_group(event.group_id)
-    header, images = await build_daily_report(group_info)
-    messages = [{"type": "text", "data": {"text": header}}]
-    for img in images:
-        img_b64 = base64.b64encode(img).decode()
-        messages.append({"type": "image", "data": {"file": f"base64://{img_b64}"}})
-    await bot.call_api("send_group_msg", group_id=event.group_id, message=messages)
+    await bot.call_api("send_group_msg", group_id=event.group_id, message="正在生成日报...")
+    try:
+        group_info = await get_group(event.group_id)
+        header, images = await build_daily_report(group_info)
+        messages = [{"type": "text", "data": {"text": header}}]
+        for img in images:
+            img_b64 = base64.b64encode(img).decode()
+            messages.append({"type": "image", "data": {"file": f"base64://{img_b64}"}})
+        await bot.call_api("send_group_msg", group_id=event.group_id, message=messages)
+    except Exception as exc:
+        log.error(f"Failed to build daily report for group {event.group_id}: {exc}")
+        await bot.call_api("send_group_msg", group_id=event.group_id, message=f"日报生成失败：{exc}")
