@@ -403,6 +403,8 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
             record_time = datetime.fromisoformat(raw_time) if isinstance(raw_time, str) else None
         except Exception:
             record_time = None
+        if record_time and record_time.tzinfo is None:
+            record_time = record_time.replace(tzinfo=SHANGHAI_TZ)
         if not record_time or record_time < since:
             continue
         index = (now.date() - record_time.astimezone(SHANGHAI_TZ).date()).days

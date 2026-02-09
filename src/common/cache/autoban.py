@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from cashews import Cache
+from tiebameow.utils.time_utils import SHANGHAI_TZ, now_with_tz
 
 CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,7 +27,9 @@ async def add_autoban_record(fid: int, count: int, at_time: datetime | None = No
     if count <= 0:
         return
     if at_time is None:
-        at_time = datetime.now()
+        at_time = now_with_tz()
+    elif at_time.tzinfo is None:
+        at_time = at_time.replace(tzinfo=SHANGHAI_TZ)
     records = await get_autoban_records(fid)
     records.append({"time": at_time.isoformat(), "count": int(count)})
     await _autoban_cache.set(f"fid:{fid}", records, expire="10d")
@@ -45,6 +48,8 @@ async def get_autoban_count(fid: int, since: datetime) -> int:
             record_time = datetime.fromisoformat(raw_time) if isinstance(raw_time, str) else None
         except Exception:
             record_time = None
+        if record_time and record_time.tzinfo is None:
+            record_time = record_time.replace(tzinfo=SHANGHAI_TZ)
         if record_time and record_time >= since:
             total += int(count)
     return total
@@ -62,6 +67,8 @@ async def trim_autoban_records(fid: int, before: datetime) -> None:
             record_time = datetime.fromisoformat(raw_time) if isinstance(raw_time, str) else None
         except Exception:
             record_time = None
+        if record_time and record_time.tzinfo is None:
+            record_time = record_time.replace(tzinfo=SHANGHAI_TZ)
         if record_time and record_time >= before:
             keep.append(record)
 
