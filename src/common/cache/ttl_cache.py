@@ -3,6 +3,8 @@ import time
 from collections import OrderedDict
 from typing import Any
 
+from logger import log
+
 
 class TTLCache:
     def __init__(self, capacity: int, default_ttl: int = 60, cleanup_interval: int = 600):
@@ -12,27 +14,37 @@ class TTLCache:
         self.cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self._lock = asyncio.Lock()
         self._cleanup_task: asyncio.Task | None = None
+        self._started = False
 
     async def _cleanup_loop(self):
         while True:
-            await asyncio.sleep(self.cleanup_interval)
-            async with self._lock:
-                current_time = time.time()
-                keys_to_remove = [key for key, (_, expire_time) in self.cache.items() if current_time > expire_time]
-                for key in keys_to_remove:
-                    self.cache.pop(key, None)
+            try:
+                await asyncio.sleep(self.cleanup_interval)
+                async with self._lock:
+                    current_time = time.time()
+                    keys_to_remove = [key for key, (_, expire_time) in self.cache.items() if current_time > expire_time]
+                    for key in keys_to_remove:
+                        self.cache.pop(key, None)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.exception("Error in TTLCache cleanup loop: {}", e)
 
-    def _ensure_cleanup_running(self):
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
+    async def start(self):
+        async with self._lock:
+            if self._started:
+                return
 
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = loop.create_task(self._cleanup_loop())
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+
+            if self._cleanup_task is None or self._cleanup_task.done():
+                self._cleanup_task = loop.create_task(self._cleanup_loop())
+                self._started = True
 
     async def get(self, key: str) -> Any | None:
-        self._ensure_cleanup_running()
         async with self._lock:
             if key not in self.cache:
                 return None
@@ -46,7 +58,6 @@ class TTLCache:
             return value
 
     async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        self._ensure_cleanup_running()
         if ttl is None:
             ttl = self.default_ttl
 
@@ -70,3 +81,4 @@ class TTLCache:
             except asyncio.CancelledError:
                 pass
         self._cleanup_task = None
+        self._started = False
