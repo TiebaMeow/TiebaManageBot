@@ -55,12 +55,24 @@ async def check_thread_status(group_info: GroupInfo, tid: int) -> str:
         return f"获取帖子状态时发生错误: {e}"
 
 
-async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int, operator_id: int) -> str:
-    """添加任务"""
+async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int, operator_id: int) -> tuple[bool, str]:
+    """
+    添加强制删帖任务
+
+    Args:
+        group_info: 群GroupInfo
+        message_id: 触发命令的消息 ID
+        bot_id: 负责执行任务的机器人 ID
+        tid: 贴子ID
+        operator_id: 操作者的 ID
+
+    Returns:
+        tuple[bool, str]: 返回任务是否成功添加和提示信息
+    """
     async with _lock:
         task_id = get_task_id(group_info.group_id, tid)
         if task_id in _active_tasks:
-            return "该帖子已在强制删除队列中。"
+            return False, "该帖子已在强制删除队列中。"
 
         expire_time = time.time() + (config.force_delete_max_duration * 60)
         info: TaskInfo = {
@@ -81,7 +93,10 @@ async def add_task(group_info: GroupInfo, message_id: int, bot_id: str, tid: int
     # 确保 Worker 运行
     _ensure_worker_running()
 
-    return f"已启动强制删帖任务 tid={tid}，将在后台持续尝试删除{config.force_delete_max_duration}分钟。"
+    return (
+        True,
+        f"已启动强制删帖任务，将在后台持续尝试删除{config.force_delete_max_duration}分钟。",
+    )
 
 
 async def remove_task(task_id: str) -> bool:

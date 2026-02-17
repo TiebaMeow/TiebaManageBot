@@ -44,7 +44,9 @@ async def force_del_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match
     if err_msg := await service.check_thread_status(group_info, tid):
         await force_del_cmd.finish(f"删帖任务添加失败: {err_msg}")
 
-    msg = await service.add_task(group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id)
+    success, msg = await service.add_task(
+        group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
+    )
     await force_del_cmd.finish(msg)
 
 

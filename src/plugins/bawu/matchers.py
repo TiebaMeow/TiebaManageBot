@@ -1,7 +1,7 @@
 from typing import Literal
 
 from arclet.alconna import Alconna, Args, Arparma, MultiVar
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, permission
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
@@ -19,6 +19,7 @@ from src.utils import (
     rule_signed,
 )
 
+from ..force_delete.service import add_task as add_force_delete_task
 from . import service
 
 del_thread_alc = Alconna(
@@ -46,6 +47,7 @@ del_thread_cmd = on_alconna(
 @del_thread_cmd.handle()
 @require_slave_bduss
 async def del_thread_handle(
+    bot: Bot,
     event: GroupMessageEvent,
     thread_urls: Query[tuple[str, ...]] = AlconnaQuery("thread_urls", ()),
 ):
@@ -55,11 +57,39 @@ async def del_thread_handle(
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
 
     client = await ClientCache.get_bawu_client(event.group_id)
-    succeeded, failed = await service.delete_threads(client, group_info, tids, event.user_id)
+    succeeded, failed, protected = await service.delete_threads(client, group_info, tids, event.user_id)
 
     succeeded_str = f"\n成功删除{len(succeeded)}个贴子。" if succeeded else ""
     failed_str = f"\n以下贴子删除失败：{', '.join('tid=' + str(tid) for tid in failed)}" if failed else ""
-    await del_thread_cmd.finish(f"删贴操作完成。{succeeded_str}{failed_str}")
+    protected_str = (
+        f"\n以下贴子受保护无法删除：{', '.join('tid=' + str(tid) for tid in protected)}" if protected else ""
+    )
+    if not protected:
+        await del_thread_cmd.finish(f"删贴操作完成。{succeeded_str}{failed_str}{protected_str}")
+
+    confirm = await del_thread_cmd.prompt(
+        f"删贴操作完成。{succeeded_str}{failed_str}{protected_str}\n"
+        "即将对被保护的帖子进行强制删除\n"
+        "发送“确认”以继续，发送其他内容取消操作。",
+        timeout=60,
+    )
+    if confirm is None or confirm.extract_plain_text().strip() != "确认":
+        await del_thread_cmd.finish("操作已取消。")
+
+    group_info = await get_group(event.group_id)
+    msg_list: list[tuple[int, str]] = []
+
+    for tid in protected:
+        success, msg = await add_force_delete_task(
+            group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
+        )
+        if success:
+            msg_list.append((tid, "添加成功"))
+        else:
+            msg_list.append((tid, msg))
+
+    msg_list_str = "\n".join(f"tid={tid}: {msg}" for tid, msg in msg_list)
+    await del_thread_cmd.finish(f"强制删帖任务已添加，正在后台持续尝试删除以下帖子：\n{msg_list_str}")
 
 
 del_post_alc = Alconna(

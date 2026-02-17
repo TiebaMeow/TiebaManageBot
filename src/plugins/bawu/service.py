@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from aiotieba import PostSortType
+from tiebameow.client.tieba_client import UnretriableApiError
 
 from src.common import tieba_uid2user_info_cached
 from src.db import GroupInfo, TextDataModel
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 async def delete_threads(
     client: Client, group_info: GroupInfo, tids: Iterable[int], uploader_id: int
-) -> tuple[list[int], list[int]]:
+) -> tuple[list[int], list[int], list[int]]:
     """
     删贴并记录操作。
 
@@ -27,10 +28,11 @@ async def delete_threads(
         uploader_id: 执行删除操作的用户ID
 
     Returns:
-        (succeeded_tids, failed_tids)
+        (succeeded_tids, failed_tids, protected_tids)
     """
     succeeded = []
     failed = []
+    protected = []
     for tid in tids:
         posts = await client.get_posts(tid)
         user_info = await client.get_user_info(posts.thread.author_id)
@@ -41,22 +43,32 @@ async def delete_threads(
         else:
             del_coro = client.del_thread(group_info.fid, tid)
 
-        if await del_coro:
-            succeeded.append(tid)
-            await add_associated_data(
-                user_info,
-                group_info,
-                text_data=[
-                    TextDataModel(
-                        uploader_id=uploader_id,
-                        fid=group_info.fid,
-                        text=f"[自动添加]删贴\n标题：{posts.thread.title}\n{posts.thread.text}",
-                    )
-                ],
-            )
-        else:
-            failed.append(tid)
-    return succeeded, failed
+        try:
+            result = await del_coro
+            if result:
+                succeeded.append(tid)
+                await add_associated_data(
+                    user_info,
+                    group_info,
+                    text_data=[
+                        TextDataModel(
+                            uploader_id=uploader_id,
+                            fid=group_info.fid,
+                            text=f"[自动添加]删贴\n标题：{posts.thread.title}\n{posts.thread.text}",
+                        )
+                    ],
+                )
+            else:
+                failed.append(tid)
+
+        except UnretriableApiError as e:
+            if e.code == 224009:
+                # 贴子受保护无法删除
+                protected.append(tid)
+            else:
+                failed.append(tid)
+
+    return succeeded, failed, protected
 
 
 async def delete_posts(
