@@ -17,7 +17,7 @@ from src.common.cache import (
     remove_force_delete_record,
     save_force_delete_records,
 )
-from src.db import GroupInfo, TextDataModel
+from src.db import TextDataModel
 from src.db.crud import add_associated_data
 
 from .config import config
@@ -355,7 +355,8 @@ async def check_thread_status(group_info: GroupInfo, tid: int) -> str:
     """
     检查帖子是否已存在
 
-    :Returns: 错误信息，空字符串表示存在
+    Returns:
+        str: 错误信息，空字符串表示存在
     """
     try:
         client = await ClientCache.get_bawu_client(group_info.group_id)
@@ -445,10 +446,10 @@ def get_force_delete_task_info(group_id: int, tid: int) -> str:
     task_id = get_force_delete_task_id(group_id, tid)
     if task_id in _active_force_delete_tasks:
         attempts = _active_force_delete_tasks[task_id]["attempts"]
-        return (
-            f"进行中，已尝试删除 {attempts} 次，"
-            f"持续到 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_active_force_delete_tasks[task_id]['expire_time']))}。"
+        expire_time_str = time.strftime(
+            "%Y-%m-%d %H:%M:%S", time.localtime(_active_force_delete_tasks[task_id]["expire_time"])
         )
+        return f"进行中，已尝试删除 {attempts} 次，持续到 {expire_time_str}。"
     return "无进行中任务"
 
 
@@ -477,6 +478,13 @@ async def save_active_force_delete_tasks():
     """系统关闭时保存当前的活动任务"""
     async with _force_delete_lock:
         await save_force_delete_records(_active_force_delete_tasks)
+
+    if _force_delete_worker_task and not _force_delete_worker_task.done():
+        _force_delete_worker_task.cancel()
+        try:
+            await _force_delete_worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 def _ensure_force_delete_worker_running():

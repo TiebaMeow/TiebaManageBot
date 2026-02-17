@@ -76,7 +76,6 @@ async def del_thread_handle(
     if confirm is None or confirm.extract_plain_text().strip() != "确认":
         await del_thread_cmd.finish("操作已取消。")
 
-    group_info = await get_group(event.group_id)
     msg_list: list[tuple[int, str]] = []
 
     for tid in protected:
