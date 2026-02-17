@@ -512,7 +512,7 @@ async def send_force_delete_feedback(task_info: TaskInfo, message: str) -> bool:
         return False
 
 
-FORCE_DELETE_ALLOW_CODES = frozenset((*ErrorHandler.RETRIABLE_CODES, 224009)) - {300000}
+FORCE_DELETE_ALLOW_CODES = frozenset((*ErrorHandler.RETRIABLE_CODES, 224009, 302)) - {300000}
 
 
 async def _force_delete_worker_loop():
