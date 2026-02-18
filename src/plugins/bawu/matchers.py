@@ -21,6 +21,11 @@ from src.utils import (
 
 from . import service
 from .config import config
+from .service import ForceDeleteManager
+
+
+async def get_force_delete_manager() -> ForceDeleteManager:
+    return await ForceDeleteManager.get_instance()
 
 del_thread_alc = Alconna(
     "del_thread",
@@ -77,9 +82,10 @@ async def del_thread_handle(
         await del_thread_cmd.finish("操作已取消。")
 
     msg_list: list[tuple[int, str]] = []
+    manager = await get_force_delete_manager()
 
     for tid in protected:
-        success, msg = await service.add_force_delete_task(
+        success, msg = await manager.add_task(
             group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
         )
         if success:
@@ -350,10 +356,11 @@ async def force_del_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match
     if tid == 0:
         await force_del_cmd.finish("无效的帖子链接。")
 
-    if err_msg := await service.check_thread_status(group_info, tid):
+    manager = await get_force_delete_manager()
+    if err_msg := await manager.check_thread_status(group_info, tid):
         await force_del_cmd.finish(f"删帖任务添加失败: {err_msg}")
 
-    success, msg = await service.add_force_delete_task(
+    success, msg = await manager.add_task(
         group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
     )
     await force_del_cmd.finish(msg)
@@ -383,7 +390,8 @@ async def cancel_force_del_handle(thread_url: Match[str], event: GroupMessageEve
     if tid == 0:
         await cancel_force_del_cmd.finish("无效的帖子链接。")
 
-    msg = await service.cancel_force_delete_task(event.group_id, tid)
+    manager = await get_force_delete_manager()
+    msg = await manager.cancel_task(event.group_id, tid)
     await cancel_force_del_cmd.finish(msg)
 
 
@@ -410,5 +418,6 @@ async def query_force_del_handle(thread_url: Match[str], event: GroupMessageEven
     tid = handle_thread_url(thread_url.result)
     if tid == 0:
         await query_force_del_cmd.finish("无效的帖子链接。")
-    status = service.get_force_delete_task_info(event.group_id, tid)
+    manager = await get_force_delete_manager()
+    status = manager.get_task_info(event.group_id, tid)
     await query_force_del_cmd.finish(f"帖子 {tid} 的状态：{status}")

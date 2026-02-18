@@ -16,10 +16,11 @@ driver = get_driver()
 @driver.on_startup
 async def _():
     # 恢复未完成的强制删帖任务
-    await service.restore_force_delete_tasks()
+    await service.ForceDeleteManager.get_instance()
 
 
 @driver.on_shutdown
 async def _():
     # 保存当前的强制删帖任务
-    await service.save_active_force_delete_tasks()
+    manager = await service.ForceDeleteManager.get_instance()
+    await manager.shutdown()
