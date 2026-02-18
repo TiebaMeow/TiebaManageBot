@@ -7,6 +7,8 @@ class Config(BaseModel):
     force_delete_max_duration: int = 120
     # 每秒尝试删除的次数（整数）
     force_delete_rps: int = 4
+    # 每次批处理任务的最大等待时间（秒）
+    force_delete_max_wait_time: float = 5
 
 
 config = get_plugin_config(Config)

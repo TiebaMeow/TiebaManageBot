@@ -515,61 +515,97 @@ async def send_force_delete_feedback(task_info: TaskInfo, message: str) -> bool:
 FORCE_DELETE_ALLOW_CODES = frozenset((*ErrorHandler.RETRIABLE_CODES, 224009, 302)) - {300000}
 
 
+async def _force_delete_task(task_id: str, task_info: TaskInfo, client: Client):
+    """单次执行删除任务"""
+
+    if task_id not in _active_force_delete_tasks:
+        return
+
+    thread_id = task_info["thread_id"]
+
+    try:
+        task_info["attempts"] += 1
+        success = await client.del_thread(task_info["fid"], thread_id)
+        if task_id not in _active_force_delete_tasks:
+            return
+
+        if success:
+            if task_id in _active_force_delete_tasks:
+                await remove_force_delete_task(task_id)
+                logger.info(f"[ForceDelete] 删帖成功: tid={thread_id}")
+                await send_force_delete_feedback(
+                    task_info,
+                    f"强制删帖任务已成功删除帖子 tid={thread_id}。",
+                )
+
+    except AiotiebaError as e:
+        if task_id not in _active_force_delete_tasks:
+            return
+        if e.code not in FORCE_DELETE_ALLOW_CODES:
+            if e.code == 300000:
+                e.msg = "权限不足"
+            logger.warning(f"[ForceDelete] 删除失败 tid={thread_id}: {e}，将终止任务")
+            await remove_force_delete_task(get_force_delete_task_id(task_info["group_id"], thread_id))
+            await send_force_delete_feedback(
+                task_info,
+                f"强制删帖任务删除帖子 tid={thread_id} 失败: {e}，已终止任务。",
+            )
+    except Exception as e:
+        if task_id not in _active_force_delete_tasks:
+            return
+        logger.error(f"[ForceDelete] 删除任务异常 tid={thread_id}: {e}，将终止任务")
+        await remove_force_delete_task(get_force_delete_task_id(task_info["group_id"], thread_id))
+        await send_force_delete_feedback(
+            task_info,
+            f"强制删帖任务删除帖子 tid={thread_id} 时发生错误: {e}，已终止任务。",
+        )
+
+
 async def _force_delete_worker_loop():
-    """单任务循环执行器"""
+    """强制删除任务循环执行器"""
 
     logger.debug("[ForceDelete] Worker 启动")
 
+    def _task_iterator():
+        while True:
+            yield from _active_force_delete_tasks.copy().items()
+
+    task_iterator = _task_iterator()
+
     while _active_force_delete_tasks:
         try:
+            now = time.time()
+            sleep_until = now + 1  # 延时1秒执行下一轮
+            client_pool: dict[int, Client] = {}
+
             for task_id, task_info in _active_force_delete_tasks.copy().items():
-                if task_id not in _active_force_delete_tasks:
-                    continue
-
-                thread_id = task_info["thread_id"]
-
-                now = time.time()
-                sleep_until = 1.0 / max(1, config.force_delete_rps) + now
-                try:
-                    if now > task_info["expire_time"]:
-                        logger.info(f"[ForceDelete] 任务超时: tid={thread_id}")
-                        await remove_force_delete_task(task_id)
-                        await send_force_delete_feedback(
-                            task_info,
-                            f"强制删帖任务已超时，未能成功删除帖子 tid={thread_id}。",
-                        )
-                        continue
-
-                    task_info["attempts"] += 1
-                    client = await ClientCache.get_bawu_client(task_info["group_id"])
-                    success = await client.del_thread(task_info["fid"], thread_id)
-
-                    if success:
-                        logger.info(f"[ForceDelete] 删帖成功: tid={thread_id}")
-                        await remove_force_delete_task(task_id)
-                        await send_force_delete_feedback(
-                            task_info,
-                            f"强制删帖任务已成功删除帖子 tid={thread_id}。",
-                        )
-                except AiotiebaError as e:
-                    if e.code not in FORCE_DELETE_ALLOW_CODES:
-                        if e.code == 300000:
-                            e.msg = "权限不足"
-                        logger.warning(f"[ForceDelete] 删除失败 tid={thread_id}: {e}")
-                        await remove_force_delete_task(task_id)
-                        await send_force_delete_feedback(
-                            task_info,
-                            f"强制删帖任务删除帖子 tid={thread_id} 失败: {e}，已终止任务。",
-                        )
-                except Exception as e:
-                    logger.error(f"[ForceDelete] 删除任务异常 tid={thread_id}: {e}")
+                if now > task_info["expire_time"]:
+                    logger.info(f"[ForceDelete] 任务超时: tid={task_info['thread_id']}")
                     await remove_force_delete_task(task_id)
                     await send_force_delete_feedback(
                         task_info,
-                        f"强制删帖任务删除帖子 tid={thread_id} 时发生错误: {e}，已终止任务。",
+                        f"强制删帖任务已超时，未能成功删除帖子 tid={task_info['thread_id']}。",
                     )
 
-                await asyncio.sleep(max(0, sleep_until - time.time()))
+            task_list = []
+
+            for _ in range(config.force_delete_rps):
+                try:
+                    task_id, task_info = next(task_iterator)
+                    if task_info["group_id"] not in client_pool:
+                        client_pool[task_info["group_id"]] = await ClientCache.get_bawu_client(task_info["group_id"])
+                    task_list.append(_force_delete_task(task_id, task_info, client_pool[task_info["group_id"]]))
+                except StopIteration:
+                    break
+
+            if task_list:
+                try:
+                    await asyncio.wait_for(asyncio.gather(*task_list), timeout=config.force_delete_max_wait_time)
+                except TimeoutError:
+                    logger.warning("[ForceDelete] 任务批处理超时")
+
+            await asyncio.sleep(max(0, sleep_until - time.time()))
+
         except asyncio.CancelledError:
             logger.info("[ForceDelete] Worker 停止，任务被取消")
             break
