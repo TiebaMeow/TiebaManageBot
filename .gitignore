@@ -216,3 +216,6 @@ autoban_list
 .env.prod
 copilot-instructions.md
 *.bak
+
+# OpenCode
+AGENTS.md

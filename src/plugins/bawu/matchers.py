@@ -1,7 +1,7 @@
 from typing import Literal
 
 from arclet.alconna import Alconna, Args, Arparma, MultiVar
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, permission
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, permission
 from nonebot.rule import Rule
 from nonebot_plugin_alconna import AlconnaQuery, Field, Match, Query, on_alconna
 
@@ -20,6 +20,12 @@ from src.utils import (
 )
 
 from . import service
+from .config import config
+from .service import ForceDeleteManager
+
+
+async def get_force_delete_manager() -> ForceDeleteManager:
+    return await ForceDeleteManager.get_instance()
 
 del_thread_alc = Alconna(
     "del_thread",
@@ -46,6 +52,7 @@ del_thread_cmd = on_alconna(
 @del_thread_cmd.handle()
 @require_slave_bduss
 async def del_thread_handle(
+    bot: Bot,
     event: GroupMessageEvent,
     thread_urls: Query[tuple[str, ...]] = AlconnaQuery("thread_urls", ()),
 ):
@@ -55,11 +62,41 @@ async def del_thread_handle(
         await del_thread_cmd.finish("参数中包含无法解析的链接，请检查输入。")
 
     client = await ClientCache.get_bawu_client(event.group_id)
-    succeeded, failed = await service.delete_threads(client, group_info, tids, event.user_id)
+    succeeded, failed, protected = await service.delete_threads(client, group_info, tids, event.user_id)
 
     succeeded_str = f"\n成功删除{len(succeeded)}个贴子。" if succeeded else ""
     failed_str = f"\n以下贴子删除失败：{', '.join('tid=' + str(tid) for tid in failed)}" if failed else ""
-    await del_thread_cmd.finish(f"删贴操作完成。{succeeded_str}{failed_str}")
+    protected_str = (
+        f"\n以下贴子受保护无法删除：{', '.join('tid=' + str(tid) for tid in protected)}" if protected else ""
+    )
+    if not protected:
+        await del_thread_cmd.finish(f"删贴操作完成。{succeeded_str}{failed_str}{protected_str}")
+
+    confirm = await del_thread_cmd.prompt(
+        f"删贴操作完成。{succeeded_str}{failed_str}{protected_str}\n"
+        "即将对被保护的帖子进行强制删除\n"
+        "发送“确认”以继续，发送其他内容取消操作。",
+        timeout=60,
+    )
+    if confirm is None or confirm.extract_plain_text().strip() != "确认":
+        await del_thread_cmd.finish("操作已取消。")
+
+    msg_list: list[tuple[int, str]] = []
+    manager = await get_force_delete_manager()
+
+    for tid in protected:
+        success, msg = await manager.add_task(
+            group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
+        )
+        if success:
+            msg_list.append((tid, "添加成功"))
+        else:
+            msg_list.append((tid, msg))
+
+    msg_list_str = "\n".join(f"tid={tid}: {msg}" for tid, msg in msg_list)
+    await del_thread_cmd.finish(
+        f"强制删帖操作完成。\n{msg_list_str}\n将在后台持续尝试删除{config.force_delete_max_duration}分钟。"
+    )
 
 
 del_post_alc = Alconna(
@@ -290,3 +327,97 @@ async def move_handle(
     success, msg = await service.move_thread(client, group_info, tid, tab_name.result)
 
     await move_cmd.finish(msg)
+
+
+force_del_alc = Alconna(
+    "force_del",
+    Args["thread_url", str, Field(completion=lambda: "请输入帖链接")],
+)
+
+force_del_cmd = on_alconna(
+    command=force_del_alc,
+    aliases={"删锁帖", "删保护帖", "删热门帖", "删锁贴", "删保护贴", "删热门贴"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_moderator),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@force_del_cmd.handle()
+@require_slave_bduss
+async def force_del_handle(bot: Bot, event: GroupMessageEvent, thread_url: Match[str]):
+    group_info = await get_group(event.group_id)
+    tid = handle_thread_url(thread_url.result)
+
+    if tid == 0:
+        await force_del_cmd.finish("无效的帖子链接。")
+
+    manager = await get_force_delete_manager()
+    if err_msg := await manager.check_thread_status(group_info, tid):
+        await force_del_cmd.finish(f"删帖任务添加失败: {err_msg}")
+
+    success, msg = await manager.add_task(
+        group_info, event.message_id, bot_id=bot.self_id, tid=tid, operator_id=event.user_id
+    )
+    await force_del_cmd.finish(msg)
+
+
+cancel_force_del_alc = Alconna(
+    "cancel_force_del",
+    Args["thread_url", str, Field(completion=lambda: "请输入帖子链接")],
+)
+
+cancel_force_del_cmd = on_alconna(
+    command=cancel_force_del_alc,
+    aliases={"取消删锁帖", "取消删保护帖", "取消删热门帖", "取消删锁贴", "取消删保护贴", "取消删热门贴"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_moderator),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@cancel_force_del_cmd.handle()
+async def cancel_force_del_handle(thread_url: Match[str], event: GroupMessageEvent):
+    tid = handle_thread_url(thread_url.result)
+    if tid == 0:
+        await cancel_force_del_cmd.finish("无效的帖子链接。")
+
+    manager = await get_force_delete_manager()
+    msg = await manager.cancel_task(event.group_id, tid)
+    await cancel_force_del_cmd.finish(msg)
+
+
+query_force_del_alc = Alconna(
+    "query_force_del",
+    Args["thread_url", str, Field(completion=lambda: "请输入帖子链接")],
+)
+
+query_force_del_cmd = on_alconna(
+    command=query_force_del_alc,
+    aliases={"查删锁帖", "查删保护帖", "查删热门帖", "查删锁贴", "查删保护贴", "查删热门贴"},
+    comp_config={"lite": True},
+    use_cmd_start=True,
+    use_cmd_sep=True,
+    rule=Rule(rule_signed, rule_moderator),
+    permission=permission.GROUP,
+    priority=5,
+    block=True,
+)
+
+
+@query_force_del_cmd.handle()
+async def query_force_del_handle(thread_url: Match[str], event: GroupMessageEvent):
+    tid = handle_thread_url(thread_url.result)
+    if tid == 0:
+        await query_force_del_cmd.finish("无效的帖子链接。")
+    manager = await get_force_delete_manager()
+    status = manager.get_task_info(event.group_id, tid)
+    await query_force_del_cmd.finish(f"帖子 {tid} 的状态：{status}")
