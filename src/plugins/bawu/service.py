@@ -23,7 +23,7 @@ from src.db.crud import add_associated_data
 from .config import config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
     from tiebameow.client import Client
 
@@ -228,7 +228,9 @@ class ForceDeleteManager:
                     if task_id in self._tasks:
                         del self._tasks[task_id]
                         await remove_force_delete_record(task_id)
-                await self._send_feedback(task_info, f"强制删帖任务删除帖子 tid={thread_id} 失败: {error_msg}，已终止任务。")
+                await self._send_feedback(
+                    task_info, f"强制删帖任务删除帖子 tid={thread_id} 失败: {error_msg}，已终止任务。"
+                )
         except Exception as e:
             if task_id not in self._tasks:
                 return
@@ -239,9 +241,15 @@ class ForceDeleteManager:
                     await remove_force_delete_record(task_id)
             await self._send_feedback(task_info, f"强制删帖任务删除帖子 tid={thread_id} 时发生错误: {e}，已终止任务。")
 
+    def _task_iterator(self) -> Iterator[tuple[str, ForceDeleteTask]]:
+        """获取当前任务的迭代器"""
+        while True:
+            yield from self._tasks.items()
+
     async def _worker_loop(self) -> None:
         """强制删除任务循环执行器"""
         logger.debug("[ForceDelete] Worker 启动")
+        task_iterator = self._task_iterator()
 
         while True:
             async with self._lock:
@@ -266,12 +274,18 @@ class ForceDeleteManager:
                 break
 
             task_list = []
-            for task_id, task in list(self._tasks.items())[: config.force_delete_rps]:
-                task_list.append(self._execute_task(task_id, task))
+            for _ in range(config.force_delete_rps):
+                try:
+                    task_id, task_info = next(task_iterator)
+                    task_list.append(self._execute_task(task_id, task_info))
+                except StopIteration:
+                    break
 
             if task_list:
                 try:
-                    await asyncio.wait_for(asyncio.gather(*task_list, return_exceptions=True), timeout=config.force_delete_max_wait_time)
+                    await asyncio.wait_for(
+                        asyncio.gather(*task_list, return_exceptions=True), timeout=config.force_delete_max_wait_time
+                    )
                 except TimeoutError:
                     logger.warning("[ForceDelete] 任务批处理超时")
 
