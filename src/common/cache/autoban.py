@@ -1,25 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-from cashews import Cache
 from tiebameow.utils.time_utils import SHANGHAI_TZ, now_with_tz
 
-CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-_autoban_cache = Cache()
-_autoban_cache.setup(f"disk://?directory={(CACHE_DIR / 'autoban_cache').as_posix()}&shards=0")
+from .disk_cache import disk_cache
 
 
 async def get_autoban_records(fid: int) -> list[dict[str, Any]]:
-    key = f"fid:{fid}"
-    records = await _autoban_cache.get(key)
+    key = f"autoban:fid:{fid}"
+    records = await disk_cache.get(key)
     if records is None:
         records = []
-        await _autoban_cache.set(key, records, expire="10d")
+        await disk_cache.set(key, records, expire="10d")
     return records
 
 
@@ -32,7 +26,7 @@ async def add_autoban_record(fid: int, count: int, at_time: datetime | None = No
         at_time = at_time.replace(tzinfo=SHANGHAI_TZ)
     records = await get_autoban_records(fid)
     records.append({"time": at_time.isoformat(), "count": int(count)})
-    await _autoban_cache.set(f"fid:{fid}", records, expire="10d")
+    await disk_cache.set(f"autoban:fid:{fid}", records, expire="10d")
 
 
 async def get_autoban_count(fid: int, since: datetime) -> int:
@@ -72,4 +66,4 @@ async def trim_autoban_records(fid: int, before: datetime) -> None:
         if record_time and record_time >= before:
             keep.append(record)
 
-    await _autoban_cache.set(f"fid:{fid}", keep, expire="10d")
+    await disk_cache.set(f"autoban:fid:{fid}", keep, expire="10d")

@@ -1,5 +1,6 @@
 from .appeal import del_appeal_id, get_appeal_id, get_appeals, set_appeal_id, set_appeals
 from .autoban import add_autoban_record, get_autoban_count, get_autoban_records, trim_autoban_records
+from .disk_cache import disk_cache
 from .force_delete import (
     add_force_delete_record,
     get_all_force_delete_records,
@@ -28,6 +29,7 @@ __all__ = [
     "trim_autoban_records",
     "get_review_notify_payload",
     "set_review_notify_payload",
+    "disk_cache",
     "ClientCache",
     "get_tieba_name",
     "get_user_threads_cached",

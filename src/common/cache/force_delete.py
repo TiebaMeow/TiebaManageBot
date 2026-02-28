@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TypedDict
 
-from cashews import Cache
-
-CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-force_delete_cache = Cache()
-force_delete_cache.setup(f"disk://?directory={(CACHE_DIR / 'force_delete_cache').as_posix()}&shards=0")
+from .disk_cache import disk_cache
 
 
 class TaskInfo(TypedDict):
@@ -23,15 +16,15 @@ class TaskInfo(TypedDict):
     attempts: int  # 尝试次数
 
 
-KEY = "force_delete_tasks"
+KEY = "fd:tasks"
 
 
 async def get_all_force_delete_records() -> dict[str, TaskInfo]:
     """获取所有持久化的任务记录"""
-    tasks = await force_delete_cache.get(KEY)
+    tasks = await disk_cache.get(KEY)
     if tasks is None:
         tasks = {}
-        await force_delete_cache.set(KEY, tasks, expire="30d")
+        await disk_cache.set(KEY, tasks, expire="30d")
     return tasks
 
 
@@ -39,7 +32,7 @@ async def add_force_delete_record(task_id: str, info: TaskInfo) -> None:
     """添加任务记录到持久化缓存"""
     tasks = await get_all_force_delete_records()
     tasks[task_id] = info
-    await force_delete_cache.set(KEY, tasks, expire="30d")
+    await disk_cache.set(KEY, tasks, expire="30d")
 
 
 async def remove_force_delete_record(task_id: str) -> None:
@@ -47,9 +40,9 @@ async def remove_force_delete_record(task_id: str) -> None:
     tasks = await get_all_force_delete_records()
     if task_id in tasks:
         del tasks[task_id]
-        await force_delete_cache.set(KEY, tasks, expire="30d")
+        await disk_cache.set(KEY, tasks, expire="30d")
 
 
 async def save_force_delete_records(tasks: dict[str, TaskInfo]) -> None:
     """保存所有任务记录到持久化缓存"""
-    await force_delete_cache.set(KEY, tasks, expire="30d")
+    await disk_cache.set(KEY, tasks, expire="30d")

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from asyncio import Semaphore
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aiotieba.api.tieba_uid2user_info._classdef import UserInfo_TUid
-from cashews import Cache
 from tiebameow.client import Client
 
 if TYPE_CHECKING:
@@ -14,14 +12,8 @@ if TYPE_CHECKING:
 
 from src.db.crud import get_group
 
+from .disk_cache import disk_cache
 from .ttl_cache import TTLCache
-
-CACHE_DIR = Path(__file__).parents[3] / "data" / "cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-tiebaname_cache = Cache()
-tiebaname_cache.setup(f"disk://?directory={(CACHE_DIR / 'tieba_name_cache').as_posix()}&shards=0")
-
 
 in_memory_cache = TTLCache(capacity=1000, default_ttl=300)
 
@@ -200,20 +192,20 @@ async def get_user_posts_cached(client: Client, user_id: int, pn: int, rn: int) 
 
 
 async def get_tieba_name(fid: int) -> str:
-    key = f"fid:{fid}"
-    if name := await tiebaname_cache.get(key):
+    key = f"tb:fid:{fid}"
+    if name := await disk_cache.get(key):
         return name
 
-    err_key = f"err:{fid}"
-    if await tiebaname_cache.exists(err_key):
+    err_key = f"tb:err:{fid}"
+    if await disk_cache.exists(err_key):
         return ""
 
     client = await ClientCache.get_client()
     name = await client.get_fname(fid)
 
     if name:
-        await tiebaname_cache.set(key, name)
+        await disk_cache.set(key, name)
     else:
-        await tiebaname_cache.set(err_key, 1, expire=5)
+        await disk_cache.set(err_key, 1, expire=5)
 
     return name
