@@ -4,10 +4,10 @@ import asyncio
 import json
 from typing import Any, cast
 
-from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
 from logger import log
+from src.common.cache import get_redis
 
 from .executor import Executor
 from .template import ReviewResultPayload
@@ -16,12 +16,11 @@ from .template import ReviewResultPayload
 class Consumer:
     def __init__(
         self,
-        redis_url: str,
         group: str = "executor_group",
         stream_key: str = "reviewer:actions:stream",
         batch_size: int = 10,
     ):
-        self._redis_client = Redis.from_url(redis_url, decode_responses=True)
+        self._redis_client = get_redis()
         self._group = group
         self._stream_key = stream_key
         self._batch_size = batch_size
@@ -33,7 +32,7 @@ class Consumer:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self._redis_client.close()
+        pass
 
     async def run(self) -> None:
         """启动Worker。

@@ -6,6 +6,7 @@ from .force_delete import (
     remove_force_delete_record,
     save_force_delete_records,
 )
+from .redis_pool import close_redis_pool, get_redis, init_redis_pool
 from .review_notify import get_review_notify_payload, set_review_notify_payload
 from .tieba_client import (
     ClientCache,
@@ -36,4 +37,7 @@ __all__ = [
     "remove_force_delete_record",
     "get_all_force_delete_records",
     "save_force_delete_records",
+    "init_redis_pool",
+    "close_redis_pool",
+    "get_redis",
 ]

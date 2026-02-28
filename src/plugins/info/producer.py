@@ -95,10 +95,23 @@ class Producer:
         return await self.queue.get()
 
     async def stop(self):
-        """停止数据获取"""
         if not self.producer_task.done():
             self.producer_task.cancel()
             try:
                 await self.producer_task
             except asyncio.CancelledError:
                 pass
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        self.buffer.clear()
+
+    def __del__(self):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        if hasattr(self, "producer_task") and self.producer_task and not self.producer_task.done():
+            self.producer_task.cancel()

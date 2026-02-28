@@ -153,8 +153,9 @@ remove_admin_alc = Alconna(
         "admin_users",
         MultiVar(str, "+"),
         Field(
-            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的admin权限账号。"
-            "考虑到特殊情况，本操作不支持通过艾特进行。"
+            completion=lambda: (
+                "请输入一个或多个（以空格分隔）需要移除的admin权限账号。考虑到特殊情况，本操作不支持通过艾特进行。"
+            )
         ),
     ],
 )
@@ -246,8 +247,9 @@ remove_moderator_alc = Alconna(
         "moderator_users",
         MultiVar(str, "+"),
         Field(
-            completion=lambda: "请输入一个或多个（以空格分隔）需要移除的moderator权限账号。"
-            "考虑到特殊情况，本操作不支持通过艾特进行。"
+            completion=lambda: (
+                "请输入一个或多个（以空格分隔）需要移除的moderator权限账号。考虑到特殊情况，本操作不支持通过艾特进行。"
+            )
         ),
     ],
 )

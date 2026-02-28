@@ -27,6 +27,7 @@ from .service import ForceDeleteManager
 async def get_force_delete_manager() -> ForceDeleteManager:
     return await ForceDeleteManager.get_instance()
 
+
 del_thread_alc = Alconna(
     "del_thread",
     Args[

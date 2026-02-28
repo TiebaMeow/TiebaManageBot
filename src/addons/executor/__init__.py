@@ -1,19 +1,15 @@
 import asyncio
 
-from nonebot import get_driver, get_plugin_config
+from nonebot import get_driver
 
 from logger import log
 
 from . import matchers as matchers
-from .config import Config
 from .consumer import Consumer
 
 driver = get_driver()
-config = get_plugin_config(Config)
 
-_consumer = Consumer(
-    redis_url=str(config.redis_url),
-)
+_consumer = Consumer()
 
 task: asyncio.Task | None = None
 
