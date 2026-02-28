@@ -44,6 +44,18 @@ _FONT_NAME = font_manager.FontProperties(fname=FONT_PATH).get_name()
 plt.rcParams["font.family"] = _FONT_NAME
 plt.rcParams["axes.unicode_minus"] = False
 
+# ── 全局调色板 ──────────────────────────────────────────────────────────
+_CLR_PRIMARY = "#4e79a7"
+_CLR_SECONDARY = "#f28e2b"
+_CLR_GREEN = "#59a14f"
+_CLR_YELLOW = "#edc949"
+_CLR_RED = "#e15759"
+_CLR_TEAL = "#76b7b2"
+_CLR_PURPLE = "#b07aa1"
+_BG_COLOR = "#fafbfc"
+_GRID_ALPHA = 0.25
+_ANNOT_SIZE = 7
+
 
 @dataclass
 class BawuOpsStats:
@@ -94,16 +106,18 @@ def _load_stopwords() -> set[str]:
 
 def _fig_to_png(fig: Figure) -> bytes:
     buf = BytesIO()
+    fig.set_facecolor(_BG_COLOR)
     fig.tight_layout()
-    fig.savefig(buf, format="png", dpi=150)
+    fig.savefig(buf, format="png", dpi=200, facecolor=fig.get_facecolor(), bbox_inches="tight", pad_inches=0.2)
     return buf.getvalue()
 
 
 def _render_empty_image(text: str) -> bytes:
     fig = Figure(figsize=(6, 3))
     ax = fig.add_subplot(111)
+    ax.set_facecolor(_BG_COLOR)
     ax.axis("off")
-    ax.text(0.5, 0.5, text, ha="center", va="center", fontsize=16)
+    ax.text(0.5, 0.5, text, ha="center", va="center", fontsize=16, color="#666666")
     return _fig_to_png(fig)
 
 
@@ -174,6 +188,19 @@ def _content_text_query(fid: int, start: datetime, end: datetime):
     return union_all(q_thread, q_post, q_comment).subquery()
 
 
+def _content_author_query(fid: int, start: datetime, end: datetime):
+    q_thread = select(Thread.author_id.label("author_id")).where(
+        Thread.fid == fid, Thread.create_time >= start, Thread.create_time < end
+    )
+    q_post = select(Post.author_id.label("author_id")).where(
+        Post.fid == fid, Post.create_time >= start, Post.create_time < end
+    )
+    q_comment = select(Comment.author_id.label("author_id")).where(
+        Comment.fid == fid, Comment.create_time >= start, Comment.create_time < end
+    )
+    return union_all(q_thread, q_post, q_comment).subquery()
+
+
 async def _get_time_counts(fid: int, start: datetime, end: datetime, unit: str) -> dict[datetime, int]:
     content = _content_time_query(fid, start, end)
     bucket = func.date_trunc(unit, content.c.ctime).label("bucket")
@@ -228,39 +255,127 @@ def _normalize_levels(*level_maps: dict[int, int]) -> list[int]:
     return sorted(levels)
 
 
+async def _get_top_authors(fid: int, start: datetime, end: datetime, limit: int = 10) -> list[tuple[int, int]]:
+    content = _content_author_query(fid, start, end)
+    stmt = (
+        select(content.c.author_id, func.count().label("cnt"))
+        .where(content.c.author_id.isnot(None))
+        .group_by(content.c.author_id)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    async with get_addon_session() as session:
+        result = await session.execute(stmt)
+    return [(int(row.author_id), int(row.cnt)) for row in result.all()]
+
+
+async def _lookup_author_names(author_ids: list[int]) -> dict[int, str]:
+    if not author_ids:
+        return {}
+    client = await ClientCache.get_client()
+    names: dict[int, str] = {}
+    for uid in author_ids:
+        try:
+            user_info = await client.get_user_info(uid)
+            if user_info.show_name:
+                names[uid] = user_info.show_name
+            else:
+                names[uid] = f"used_id: {uid}"
+        except Exception:
+            names[uid] = f"user_id: {uid}"
+    return names
+
+
+def _interpolate_color(c1: str, c2: str, t: float) -> str:
+    r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+    r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+    r = int(r1 + (r2 - r1) * t)
+    g = int(g1 + (g2 - g1) * t)
+    b = int(b1 + (b2 - b1) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def _plot_hourly_counts(labels: list[str], last_counts: list[int], prev_counts: list[int]) -> bytes:
-    fig = Figure(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4.5))
     ax = fig.add_subplot(111)
+    ax.set_facecolor(_BG_COLOR)
     x_positions = list(range(len(labels)))
-    ax.plot(x_positions, last_counts, marker="o", linewidth=2, label="最近24小时")
-    ax.plot(x_positions, prev_counts, marker="o", linewidth=2, label="上一轮24小时")
+    ax.plot(
+        x_positions,
+        last_counts,
+        marker="o",
+        markersize=4,
+        linewidth=2,
+        color=_CLR_PRIMARY,
+        label="最近24小时",
+        zorder=3,
+    )
+    ax.fill_between(x_positions, last_counts, alpha=0.08, color=_CLR_PRIMARY)
+    ax.plot(
+        x_positions,
+        prev_counts,
+        marker="o",
+        markersize=4,
+        linewidth=2,
+        color=_CLR_SECONDARY,
+        label="上一轮24小时",
+        zorder=3,
+    )
+    ax.fill_between(x_positions, prev_counts, alpha=0.08, color=_CLR_SECONDARY)
     for x_pos, val in zip(x_positions, last_counts, strict=True):
-        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+        ax.annotate(
+            str(val),
+            (x_pos, val),
+            textcoords="offset points",
+            xytext=(0, 7),
+            ha="center",
+            fontsize=_ANNOT_SIZE,
+            color=_CLR_PRIMARY,
+        )
     for x_pos, val in zip(x_positions, prev_counts, strict=True):
-        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, -10), ha="center", fontsize=8)
+        ax.annotate(
+            str(val),
+            (x_pos, val),
+            textcoords="offset points",
+            xytext=(0, -11),
+            ha="center",
+            fontsize=_ANNOT_SIZE,
+            color=_CLR_SECONDARY,
+        )
     ax.set_xticks(x_positions, labels)
-    ax.set_title("24小时发贴量（对比）")
+    ax.set_title("24小时发贴量（对比）", fontsize=14, fontweight="bold", pad=12)
     ax.set_xlabel("小时")
     ax.set_ylabel("发贴量")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", framealpha=0.9)
+    ax.grid(True, alpha=_GRID_ALPHA, linestyle="--")
     ax.tick_params(axis="x", rotation=45)
+    ax.spines[["top", "right"]].set_visible(False)
     return _fig_to_png(fig)
 
 
 def _plot_daily_counts(labels: list[str], counts: list[int]) -> bytes:
-    fig = Figure(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4.5))
     ax = fig.add_subplot(111)
+    ax.set_facecolor(_BG_COLOR)
     x_positions = list(range(len(labels)))
-    ax.plot(x_positions, counts, marker="o", linewidth=2, color="#4e79a7")
+    ax.plot(x_positions, counts, marker="o", markersize=4, linewidth=2, color=_CLR_PRIMARY, zorder=3)
+    ax.fill_between(x_positions, counts, alpha=0.10, color=_CLR_PRIMARY)
     for x_pos, val in zip(x_positions, counts, strict=True):
-        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+        ax.annotate(
+            str(val),
+            (x_pos, val),
+            textcoords="offset points",
+            xytext=(0, 7),
+            ha="center",
+            fontsize=_ANNOT_SIZE,
+        )
     ax.set_xticks(x_positions, labels)
-    ax.set_title("近30天每日发贴量")
+    ax.set_title("近30天每日发贴量", fontsize=14, fontweight="bold", pad=12)
     ax.set_xlabel("日期")
     ax.set_ylabel("发贴量")
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, alpha=_GRID_ALPHA, linestyle="--")
     ax.tick_params(axis="x", rotation=45)
+    ax.spines[["top", "right"]].set_visible(False)
     return _fig_to_png(fig)
 
 
@@ -270,60 +385,105 @@ def _plot_level_distribution(
     user_counts: list[int],
     title: str,
 ) -> bytes:
-    fig = Figure(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4.5))
     axes = fig.subplots(1, 2)
-    bars_total = axes[0].bar(levels, total_counts, color="#59a14f")
-    axes[0].set_title(f"{title}（贴子）")
+    for ax in axes:
+        ax.set_facecolor(_BG_COLOR)
+
+    bars_total = axes[0].bar(levels, total_counts, color=_CLR_GREEN, edgecolor="white", linewidth=0.5)
+    axes[0].set_title(f"{title}（贴子）", fontsize=12, fontweight="bold")
     axes[0].set_xlabel("等级")
     axes[0].set_ylabel("数量")
-    axes[0].grid(True, axis="y", alpha=0.3)
+    axes[0].grid(True, axis="y", alpha=_GRID_ALPHA, linestyle="--")
+    axes[0].spines[["top", "right"]].set_visible(False)
     for bar in bars_total:
         height = bar.get_height()
-        axes[0].text(
-            bar.get_x() + bar.get_width() / 2,
-            height,
-            str(int(height)),
-            ha="center",
-            va="bottom",
-            fontsize=8,
-        )
+        if height > 0:
+            axes[0].text(
+                bar.get_x() + bar.get_width() / 2,
+                height,
+                str(int(height)),
+                ha="center",
+                va="bottom",
+                fontsize=_ANNOT_SIZE,
+            )
 
-    bars_user = axes[1].bar(levels, user_counts, color="#edc949")
-    axes[1].set_title(f"{title}（用户去重）")
+    bars_user = axes[1].bar(levels, user_counts, color=_CLR_YELLOW, edgecolor="white", linewidth=0.5)
+    axes[1].set_title(f"{title}（用户去重）", fontsize=12, fontweight="bold")
     axes[1].set_xlabel("等级")
     axes[1].set_ylabel("用户数")
-    axes[1].grid(True, axis="y", alpha=0.3)
+    axes[1].grid(True, axis="y", alpha=_GRID_ALPHA, linestyle="--")
+    axes[1].spines[["top", "right"]].set_visible(False)
     for bar in bars_user:
         height = bar.get_height()
-        axes[1].text(
-            bar.get_x() + bar.get_width() / 2,
-            height,
-            str(int(height)),
-            ha="center",
-            va="bottom",
-            fontsize=8,
-        )
+        if height > 0:
+            axes[1].text(
+                bar.get_x() + bar.get_width() / 2,
+                height,
+                str(int(height)),
+                ha="center",
+                va="bottom",
+                fontsize=_ANNOT_SIZE,
+            )
 
     return _fig_to_png(fig)
 
 
 def _plot_bawu_ops(stats: BawuOpsStats) -> bytes:
-    fig = Figure(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4.5))
     ax = fig.add_subplot(111)
+    ax.set_facecolor(_BG_COLOR)
     x_positions = list(range(len(stats.labels)))
-    ax.plot(x_positions, stats.delete_counts, marker="o", linewidth=2, label="删贴")
-    ax.plot(x_positions, stats.ban_counts, marker="o", linewidth=2, label="封禁")
+    ax.plot(
+        x_positions,
+        stats.delete_counts,
+        marker="o",
+        markersize=5,
+        linewidth=2,
+        color=_CLR_RED,
+        label="删贴",
+        zorder=3,
+    )
+    ax.fill_between(x_positions, stats.delete_counts, alpha=0.08, color=_CLR_RED)
+    ax.plot(
+        x_positions,
+        stats.ban_counts,
+        marker="o",
+        markersize=5,
+        linewidth=2,
+        color=_CLR_PURPLE,
+        label="封禁",
+        zorder=3,
+    )
+    ax.fill_between(x_positions, stats.ban_counts, alpha=0.08, color=_CLR_PURPLE)
     for x_pos, val in zip(x_positions, stats.delete_counts, strict=True):
-        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=8)
+        ax.annotate(
+            str(val),
+            (x_pos, val),
+            textcoords="offset points",
+            xytext=(0, 7),
+            ha="center",
+            fontsize=_ANNOT_SIZE,
+            color=_CLR_RED,
+        )
     for x_pos, val in zip(x_positions, stats.ban_counts, strict=True):
-        ax.annotate(str(val), (x_pos, val), textcoords="offset points", xytext=(0, -10), ha="center", fontsize=8)
+        ax.annotate(
+            str(val),
+            (x_pos, val),
+            textcoords="offset points",
+            xytext=(0, -11),
+            ha="center",
+            fontsize=_ANNOT_SIZE,
+            color=_CLR_PURPLE,
+        )
     ax.set_xticks(x_positions, stats.labels)
-    ax.set_title("近7天吧务操作量")
+    ax.set_title("近7天吧务操作量", fontsize=14, fontweight="bold", pad=12)
     ax.set_xlabel("日期")
     ax.set_ylabel("操作量")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", framealpha=0.9)
+    ax.grid(True, alpha=_GRID_ALPHA, linestyle="--")
     ax.tick_params(axis="x", rotation=45)
+    ax.spines[["top", "right"]].set_visible(False)
     return _fig_to_png(fig)
 
 
@@ -351,17 +511,55 @@ def _render_wordcloud(tokens: list[str]) -> bytes:
         return _render_empty_image("无有效文本")
     wc = WordCloud(
         font_path=str(FONT_PATH),
-        background_color="white",
+        background_color=_BG_COLOR,
         width=1200,
         height=800,
         max_words=200,
         collocations=False,
+        colormap="Set2",
+        margin=10,
+        prefer_horizontal=0.7,
     )
     wc.generate(" ".join(tokens))
     image = wc.to_image()
     buf = BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _plot_top_authors(names: list[str], counts: list[int]) -> bytes:
+    if not names:
+        return _render_empty_image("近24小时无活跃用户数据")
+
+    fig = Figure(figsize=(10, 5))
+    ax = fig.add_subplot(111)
+    ax.set_facecolor(_BG_COLOR)
+
+    display_names = names[::-1]
+    display_counts = counts[::-1]
+    y_positions = list(range(len(display_names)))
+
+    n = len(display_names)
+    colors = [_interpolate_color(_CLR_TEAL, _CLR_PRIMARY, i / max(n - 1, 1)) for i in range(n)]
+
+    bars = ax.barh(y_positions, display_counts, color=colors, edgecolor="white", linewidth=0.5, height=0.6)
+    ax.set_yticks(y_positions, display_names)
+    ax.set_title("近24小时最活跃用户 TOP 10", fontsize=14, fontweight="bold", pad=12)
+    ax.set_xlabel("发贴量")
+
+    for bar, count in zip(bars, display_counts, strict=True):
+        ax.text(
+            bar.get_width() + max(max(display_counts) * 0.02, 0.5),
+            bar.get_y() + bar.get_height() / 2,
+            str(count),
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    ax.grid(True, axis="x", alpha=_GRID_ALPHA, linestyle="--")
+    ax.spines[["top", "right"]].set_visible(False)
+    return _fig_to_png(fig)
 
 
 async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOpsStats:
@@ -420,8 +618,12 @@ async def _get_bawu_ops_stats(group_id: int, fid: int, now: datetime) -> BawuOps
 
 async def build_daily_report(group_info: GroupInfo) -> tuple[str, list[bytes]]:
     now = now_with_tz()
+    is_midnight = now.hour == 0
 
+    # ── 24小时对比图 ──────────────────────────────────────────────────
     end_hour = now.replace(minute=0, second=0, microsecond=0)
+    if is_midnight:
+        end_hour -= timedelta(hours=1)  # 0点触发时回退到昨天23:00，排除空桶
     start_48h = end_hour - timedelta(hours=48)
     counts_48h = await _get_time_counts(group_info.fid, start_48h, end_hour + timedelta(hours=1), "hour")
 
@@ -431,13 +633,17 @@ async def build_daily_report(group_info: GroupInfo) -> tuple[str, list[bytes]]:
     last_counts = [counts_48h.get(hour, 0) for hour in hours_last]
     prev_counts = [counts_48h.get(hour, 0) for hour in hours_prev]
 
+    # ── 30天每日发贴量 ────────────────────────────────────────────────
     end_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if is_midnight:
+        end_day -= timedelta(days=1)  # 0点触发时排除当天（数据为0）
     start_30d = end_day - timedelta(days=29)
     counts_30d = await _get_time_counts(group_info.fid, start_30d, end_day + timedelta(days=1), "day")
     days_30 = [start_30d + timedelta(days=i) for i in range(30)]
     labels_day = [day.strftime("%m-%d") for day in days_30]
     daily_counts = [counts_30d.get(day, 0) for day in days_30]
 
+    # ── 等级分布 ─────────────────────────────────────────────────────
     start_24h = now - timedelta(hours=24)
     levels_24h, users_24h = await _get_level_counts(group_info.fid, start_24h, now)
     start_7d = now - timedelta(days=7)
@@ -451,6 +657,7 @@ async def build_daily_report(group_info: GroupInfo) -> tuple[str, list[bytes]]:
     total_7 = [levels_7d.get(level, 0) for level in levels_7]
     users_7 = [users_7d.get(level, 0) for level in levels_7]
 
+    # ── 组装图表 ─────────────────────────────────────────────────────
     images: list[bytes] = []
     images.extend((
         await asyncio.to_thread(_plot_hourly_counts, labels_hour, last_counts, prev_counts),
@@ -469,6 +676,21 @@ async def build_daily_report(group_info: GroupInfo) -> tuple[str, list[bytes]]:
     else:
         images.append(await asyncio.to_thread(_render_empty_image, "近7天无等级数据"))
 
+    # ── 最活跃用户 TOP 10 ────────────────────────────────────────────
+    top_authors = await _get_top_authors(group_info.fid, start_24h, now)
+    if top_authors:
+        author_ids = [aid for aid, _ in top_authors]
+        name_map = await _lookup_author_names(author_ids)
+        author_names = []
+        for aid in author_ids:
+            name = name_map.get(aid, str(aid))
+            author_names.append(name if len(name) <= 10 else name[:9] + "…")
+        author_counts = [cnt for _, cnt in top_authors]
+        images.append(await asyncio.to_thread(_plot_top_authors, author_names, author_counts))
+    else:
+        images.append(await asyncio.to_thread(_render_empty_image, "近24小时无活跃用户数据"))
+
+    # ── 吧务操作 / 词云 ──────────────────────────────────────────────
     bawu_stats = await _get_bawu_ops_stats(group_info.group_id, group_info.fid, now)
     images.append(await asyncio.to_thread(_plot_bawu_ops, bawu_stats))
 
