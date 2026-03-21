@@ -24,7 +24,7 @@ dependencies = [
     "python-multipart>=0.0.21",
     "redis[hiredis]>=7.1.0",
     "sqlalchemy>=2.0.45",
-    "tiebameow[orm,renderer]>=0.4.1,<0.5.0",
+    "tiebameow[orm,renderer]>=0.4.3,<0.5.0",
     "wordcloud>=1.9.6",
 ]
 
