@@ -1,4 +1,3 @@
-import asyncio
 from typing import TYPE_CHECKING
 
 from arclet.alconna import Alconna, Args, CompSession, MultiVar
@@ -110,6 +109,7 @@ async def consumer(producer: Producer, check_posts_cmd: type[AlconnaMatcher]):
         if next_specific_posts is None:
             specific_posts_suffix = MessageSegment.text(f"第 {display_pn} 页，已无更多内容，结束查询。")
             await check_posts_cmd.send(specific_posts_img + specific_posts_suffix)
+            await producer.stop()
             return
         specific_posts_suffix = MessageSegment.text(f"第 {display_pn} 页，继续查询请输入“下一页”。")
         next_input = await check_posts_cmd.prompt(specific_posts_img + specific_posts_suffix, timeout=60, block=False)
@@ -169,8 +169,11 @@ async def check_posts_handle(
         await check_posts_cmd.finish("用户信息获取失败，请稍后重试。")
 
     await check_posts_cmd.send("正在查询...")
-    consumer_task = asyncio.create_task(consumer(Producer(client, user_info, fids), check_posts_cmd))
-    await consumer_task
+    producer = Producer(client, user_info, fids)
+    try:
+        await consumer(producer, check_posts_cmd)
+    finally:
+        await producer.stop()
 
     await check_posts_cmd.finish()
 

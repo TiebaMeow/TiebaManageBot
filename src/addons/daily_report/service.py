@@ -109,6 +109,7 @@ def _fig_to_png(fig: Figure) -> bytes:
     fig.set_facecolor(_BG_COLOR)
     fig.tight_layout()
     fig.savefig(buf, format="png", dpi=200, facecolor=fig.get_facecolor(), bbox_inches="tight", pad_inches=0.2)
+    plt.close(fig)
     return buf.getvalue()
 
 

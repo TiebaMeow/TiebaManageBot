@@ -73,7 +73,10 @@ async def handle_check_posts_plus(
         await check_posts_plus_cmd.finish("用户信息获取失败，请稍后重试。")
 
     producer = DBProducer(user_info, fids)
-    await consumer(producer, check_posts_plus_cmd)
+    try:
+        await consumer(producer, check_posts_plus_cmd)
+    finally:
+        await producer.stop()
 
 
 async def consumer(producer: DBProducer, check_posts_cmd: type[AlconnaMatcher]):
@@ -92,6 +95,7 @@ async def consumer(producer: DBProducer, check_posts_cmd: type[AlconnaMatcher]):
         if next_specific_posts is None:
             specific_posts_suffix = MessageSegment.text(f"第 {display_pn} 页，已无更多内容，结束查询。")
             await check_posts_cmd.send(specific_posts_img + specific_posts_suffix)
+            await producer.stop()
             return
         specific_posts_suffix = MessageSegment.text(f"第 {display_pn} 页，继续查询请输入“下一页”。")
         next_input = await check_posts_cmd.prompt(specific_posts_img + specific_posts_suffix, timeout=60, block=False)

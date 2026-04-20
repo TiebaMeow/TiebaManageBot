@@ -88,7 +88,10 @@ class Producer:
         except asyncio.CancelledError:
             pass
         except Exception:
-            await self.queue.put(None)
+            try:
+                self.queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
 
     async def get(self) -> bytes | None:
         """获取数据"""

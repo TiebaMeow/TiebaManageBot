@@ -55,8 +55,6 @@ class ForceDeleteManager:
     def __init__(self) -> None:
         self._tasks: dict[str, ForceDeleteTask] = {}
         self._worker_task: asyncio.Task | None = None
-        self._client_pool: dict[int, Client] = {}
-        self._client_pool_lock = asyncio.Lock()
 
     @classmethod
     async def get_instance(cls) -> ForceDeleteManager:
@@ -91,10 +89,7 @@ class ForceDeleteManager:
 
     async def get_client(self, group_id: int) -> Client:
         """获取或创建群对应的客户端"""
-        async with self._client_pool_lock:
-            if group_id not in self._client_pool:
-                self._client_pool[group_id] = await ClientCache.get_bawu_client(group_id)
-            return self._client_pool[group_id]
+        return await ClientCache.get_bawu_client(group_id)
 
     async def check_thread_status(self, group_info: GroupInfo, tid: int) -> str:
         """检查帖子是否存在"""

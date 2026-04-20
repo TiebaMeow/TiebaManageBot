@@ -2,6 +2,7 @@ import nonebot
 from nonebot.adapters.onebot.v11 import Adapter as ONEBOT_V11Adapter
 
 from src.common import ClientCache
+from src.common.cache.tieba_client import in_memory_cache
 from src.db import init_db
 
 nonebot.init()
@@ -13,6 +14,7 @@ driver.register_adapter(ONEBOT_V11Adapter)
 @driver.on_startup
 async def startup():
     await init_db()
+    await in_memory_cache.start()
 
 
 @driver.on_shutdown

@@ -99,7 +99,10 @@ class DBProducer:
         except asyncio.CancelledError:
             pass
         except Exception:
-            await self.queue.put(None)
+            try:
+                self.queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
 
     async def get(self) -> bytes | None:
         """获取数据"""
@@ -109,3 +112,13 @@ class DBProducer:
         """停止数据获取"""
         if not self.producer_task.done():
             self.producer_task.cancel()
+            try:
+                await self.producer_task
+            except asyncio.CancelledError:
+                pass
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        self.buffer.clear()

@@ -45,6 +45,8 @@ class TTLCache:
                 self._started = True
 
     async def get(self, key: str) -> Any | None:
+        if not self._started:
+            await self.start()
         async with self._lock:
             if key not in self.cache:
                 return None
@@ -60,6 +62,9 @@ class TTLCache:
     async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         if ttl is None:
             ttl = self.default_ttl
+
+        if not self._started:
+            await self.start()
 
         async with self._lock:
             if key in self.cache:
